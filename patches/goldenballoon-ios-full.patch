@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 814753b..5ccba35 100644
+index 814753b..ae6ada6 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
@@ -69,7 +69,7 @@ index 814753b..5ccba35 100644
          target_link_libraries(${MDKR_TARGET} PRIVATE ${OPENGL_LIB})
      else()
          target_link_libraries(${MDKR_TARGET} PRIVATE OpenGL::GL ${CMAKE_DL_LIBS})
-@@ -1181,11 +1203,17 @@ if(NOT EMSCRIPTEN)
+@@ -1181,11 +1203,18 @@ if(NOT EMSCRIPTEN)
          # Native "open file" panel, one implementation per platform. A
          # user-selected file is permission-exempt, which is why this replaced
          # the directory scan that used to trip macOS TCC.
@@ -84,11 +84,12 @@ index 814753b..5ccba35 100644
 +            list(APPEND APP_SOURCES
 +                ${CMAKE_SOURCE_DIR}/platform/app/file_dialog_stub.cpp
 +                ${CMAKE_SOURCE_DIR}/platform/chimppad/ChimpPadShell.mm
-+                ${CMAKE_SOURCE_DIR}/platform/chimppad/ChimpPadInput.c)
++                ${CMAKE_SOURCE_DIR}/platform/chimppad/ChimpPadInput.c
++                ${CMAKE_SOURCE_DIR}/platform/chimppad/ChimpPadRomBoot.mm)
          elseif(WIN32)
              list(APPEND APP_SOURCES ${CMAKE_SOURCE_DIR}/platform/app/file_dialog_win.cpp)
          else()
-@@ -1197,6 +1225,15 @@ if(NOT EMSCRIPTEN)
+@@ -1197,6 +1226,15 @@ if(NOT EMSCRIPTEN)
          endif()
  
          add_library(mdkr64_app STATIC ${IMGUI_SOURCES} ${APP_SOURCES})
@@ -104,7 +105,7 @@ index 814753b..5ccba35 100644
          target_compile_features(mdkr64_app PRIVATE cxx_std_17)
          # Keep warnings strict on the launcher code we own without inheriting
          # that policy into vendored Dear ImGui.  The engine's maintained C
-@@ -1243,7 +1280,11 @@ if(NOT EMSCRIPTEN)
+@@ -1243,7 +1281,11 @@ if(NOT EMSCRIPTEN)
              target_link_libraries(mdkr64_app PUBLIC ${SDL2_LIBRARIES})
          endif()
          target_link_libraries(mdkr64_app PRIVATE Threads::Threads)
@@ -321,6 +322,35 @@ index fbc11ac..cfdb5cc 100644
      // Deny by default: any argument at all means "the caller already told the
      // engine what to do". Only a bare invocation (the .app double-click, or a
      // user typing `mdkr64`) opens the launcher.
+diff --git a/platform/app/main_app.cpp b/platform/app/main_app.cpp
+index 2e85652..6e4c48d 100644
+--- a/platform/app/main_app.cpp
++++ b/platform/app/main_app.cpp
+@@ -8,6 +8,12 @@
+ #include "app_brand.h"
+ #include "app_config.h"
+ #include "app_host.h"
++#if defined(__APPLE__)
++#include <TargetConditionals.h>
++#if TARGET_OS_IOS
++#include "ChimpPadRomBoot.h"
++#endif
++#endif
+ #include "app_relaunch.h"
+ #include "app_restart.h"
+ #include "app_theme.h"
+@@ -1314,6 +1320,11 @@ int main(int argc, char **argv) {
+         return 1;
+     }
+ 
++#if defined(__APPLE__) && TARGET_OS_IOS
++    /* ChimpPad: Documents ROM / MDKR_ROM → game boot with AppHost + touch. */
++    (void)ChimpPad_PrepareIosRomBoot();
++#endif
++
+     // Non-interactive schema self-check, before any window or tee.
+     if (std::getenv("MDKR_APP_DUMP_SCHEMA")) {
+         return dumpSchema();
 diff --git a/platform/chimppad/ChimpPadInput.c b/platform/chimppad/ChimpPadInput.c
 new file mode 100644
 index 0000000..4d3bfdb
@@ -790,6 +820,136 @@ index 0000000..65ddea8
 +
 +#ifdef __cplusplus
 +}
++#endif
+diff --git a/platform/chimppad/ChimpPadRomBoot.h b/platform/chimppad/ChimpPadRomBoot.h
+new file mode 100644
+index 0000000..29b14ad
+--- /dev/null
++++ b/platform/chimppad/ChimpPadRomBoot.h
+@@ -0,0 +1,19 @@
++#pragma once
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/* On iOS: if MDKR_ROM is unset, look under the app Documents container for a
++ * DKR ROM (*.v64 / *.z64 / *.n64), prefer diddy-kong-racing.v64. When found,
++ * sets MDKR_ROM (and MDKR_APP_AUTOPLAY=1 if not already set) so the interactive
++ * AppHost boots into the game with touch controls still active.
++ * Returns 1 if a ROM path was resolved, 0 otherwise. */
++int ChimpPad_PrepareIosRomBoot(void);
++
++/* Returns the last resolved absolute ROM path (or NULL). */
++const char *ChimpPad_ResolvedRomPath(void);
++
++#ifdef __cplusplus
++}
++#endif
+diff --git a/platform/chimppad/ChimpPadRomBoot.mm b/platform/chimppad/ChimpPadRomBoot.mm
+new file mode 100644
+index 0000000..a3fb125
+--- /dev/null
++++ b/platform/chimppad/ChimpPadRomBoot.mm
+@@ -0,0 +1,99 @@
++#include "ChimpPadRomBoot.h"
++
++#import <Foundation/Foundation.h>
++#include <TargetConditionals.h>
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++static char sResolvedRom[1024];
++
++const char *ChimpPad_ResolvedRomPath(void) {
++    return sResolvedRom[0] ? sResolvedRom : NULL;
++}
++
++#if TARGET_OS_IOS
++
++static int pathLooksLikeRom(NSString *name) {
++    NSString *lower = name.lowercaseString;
++    return [lower hasSuffix:@".v64"] || [lower hasSuffix:@".z64"] ||
++           [lower hasSuffix:@".n64"];
++}
++
++static NSString *pickRomInDirectory(NSString *dir) {
++    NSFileManager *fm = NSFileManager.defaultManager;
++    NSArray<NSString *> *names =
++        [fm contentsOfDirectoryAtPath:dir error:nil];
++    if (names.count == 0) {
++        return nil;
++    }
++    /* Prefer the canonical name used by scripts/run-ios-sim.sh */
++    for (NSString *n in names) {
++        if ([n.lowercaseString isEqualToString:@"diddy-kong-racing.v64"] ||
++            [n.lowercaseString isEqualToString:@"diddy-kong-racing.z64"]) {
++            return [dir stringByAppendingPathComponent:n];
++        }
++    }
++    for (NSString *n in names) {
++        if (pathLooksLikeRom(n)) {
++            return [dir stringByAppendingPathComponent:n];
++        }
++    }
++    return nil;
++}
++
++int ChimpPad_PrepareIosRomBoot(void) {
++    sResolvedRom[0] = '\0';
++
++    const char *existing = getenv("MDKR_ROM");
++    if (existing != NULL && existing[0] != '\0') {
++        snprintf(sResolvedRom, sizeof(sResolvedRom), "%s", existing);
++        if (getenv("MDKR_APP_AUTOPLAY") == NULL) {
++            setenv("MDKR_APP_AUTOPLAY", "1", 1);
++            fprintf(stderr,
++                    "[ChimpPad] MDKR_ROM present; enabling MDKR_APP_AUTOPLAY "
++                    "for game boot with touch\n");
++        }
++        fprintf(stderr, "[ChimpPad] using MDKR_ROM=%s\n", sResolvedRom);
++        return 1;
++    }
++
++    NSArray<NSString *> *docs = NSSearchPathForDirectoriesInDomains(
++        NSDocumentDirectory, NSUserDomainMask, YES);
++    if (docs.count == 0) {
++        fprintf(stderr, "[ChimpPad] Documents directory unavailable\n");
++        return 0;
++    }
++    NSString *picked = pickRomInDirectory(docs.firstObject);
++    if (picked == nil) {
++        /* Also check a nested ROMs folder if present. */
++        NSString *nested =
++            [docs.firstObject stringByAppendingPathComponent:@"ROMs"];
++        picked = pickRomInDirectory(nested);
++    }
++    if (picked == nil) {
++        fprintf(stderr,
++                "[ChimpPad] no ROM in Documents — launcher will ask for one\n");
++        return 0;
++    }
++
++    snprintf(sResolvedRom, sizeof(sResolvedRom), "%s", picked.UTF8String);
++    setenv("MDKR_ROM", sResolvedRom, 1);
++    if (getenv("MDKR_APP_AUTOPLAY") == NULL) {
++        setenv("MDKR_APP_AUTOPLAY", "1", 1);
++    }
++    fprintf(stderr,
++            "[ChimpPad] Documents ROM selected: %s (autoplay on)\n",
++            sResolvedRom);
++    return 1;
++}
++
++#else
++
++int ChimpPad_PrepareIosRomBoot(void) {
++    sResolvedRom[0] = '\0';
++    return 0;
++}
++
 +#endif
 diff --git a/platform/chimppad/ChimpPadShell.mm b/platform/chimppad/ChimpPadShell.mm
 new file mode 100644

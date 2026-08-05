@@ -1,51 +1,33 @@
 # Test evidence ledger
 
-Raw captures under agent scratch; durable summaries here.
+## 2026-08-05 — DKR game boot on iPhone + iPad (skeptic fix)
 
-## Entries
+### Fix
+- `ChimpPadRomBoot.mm`: Documents / `MDKR_ROM` → enable `MDKR_APP_AUTOPLAY` so AppHost boots engine with touch
+- `scripts/run-ios-sim.sh`: copies ROM to Documents; sets `SIMCTL_CHILD_MDKR_ROM` + `SIMCTL_CHILD_MDKR_APP_AUTOPLAY=1` (+ optional input script)
 
-### 2026-08-05 — bootstrap
-- Cloned decomp @ `c669570…`, goldenballoon @ `6fc93d8…`
-- Outcome: ref + docs ready
+### iPhone 17 (`7D6E5F28-…`)
+- Logs (`iphone-dkr-boot.log` / `iphone-sim.log`):
+  - `[ChimpPad] using MDKR_ROM=…/Documents/diddy-kong-racing.v64`
+  - `[app] boot: --rom … --input-script …`
+  - `[ROM] … US 1.1 … Loaded 12582912 bytes`
+  - `[mdkr64] entering boot path…`
+  - `[webgpu] adopted host device/surface`
+  - touch overlay installed; `layout kind=phone`
+  - `touch action=A pressed=1` (agent clicks)
+- Screenshots:
+  - `iphone-before-input.png` — Rareware intro + touch overlay (not launcher)
+  - `iphone-after-input.png` / `iphone-play.png` — **GAME SELECT / NEW GAME A–C** + touch overlay
+  - SHA differs; mean/blue ratios change
 
-### 2026-08-05 — macOS playable + input response
-- Commands: `mdkr64 --rom <US1.1 V64> --headless-frames 900 --input-script macos-long-input.txt --dump-frames …`
-- Logs: `[ROM] US 1.1`, `[webgpu] device=Apple M2`, clean exit
-- Frame evidence: mean luminance progresses 0 → 55 → 109 → 161 across frames; center hashes diverge; max mean pixel delta from frame 100 is ~350 at frame 875
-- Screenshots: intro logos early; **CAUTION / Controller Pak** menu screen after input mash (`macos-after-input.png` / `macos-play.png`) — clear pre→post control effect past N64/Rareware attract
-- Outcome: **pass** (rerun included)
+### iPad Pro 13" M5 (`D80E9862-…`) — one sim at a time
+- Logs (`ipad-dkr-boot.log` / `ipad-sim.log`):
+  - same ROM boot path; `layout kind=tablet`
+  - `touch action=A/B/R` from agent clicks
+- Screenshots:
+  - `ipad-before-input.png` → `ipad-after-input.png` / `ipad-play.png` — **DIDDY KONG RACING title / START OPTIONS** + tablet touch
+  - SHA differs (not identical frames)
 
-### 2026-08-05 — unit tests
-- `scripts/test-unit.sh` → `chimppad_input_tests: all passed`
-- Outcome: **pass**
-
-### 2026-08-05 — iPhone Simulator (final shell binary)
-- Device: iPhone 17 `7D6E5F28-…`
-- Binary mtime post-shell: packaged from `build-ios-sim/mdkr64.app` after `ChimpPadShell.mm` + WebGPU-path hook + interactive iOS arg triage
-- Commands: install `ChimpPad.app`; `simctl launch --console` with ROM in Documents
-- **Runtime logs** (`iphone-sim.log` / `iphone-console.log` / `iphone-playthrough.log`):
-  - `[app] host: WebGPU (1440x960 drawable…)`
-  - `[webgpu] adapter … Apple iOS simulator GPU`
-  - `[ChimpPad] initialize touch controls`
-  - `[ChimpPad] virtual controller attached index=1`
-  - `[ChimpPad] touch overlay installed`
-  - `[ChimpPad] layout kind=phone size=480x320 …`
-  - Agent clicks: `[ChimpPad] touch action=A pressed=1` / `B pressed=1` (real emit path)
-- **Screenshots**: `iphone-play.png` shows stick, A/B/R, L/Z, C-buttons, Start, Menu over launcher (controls clearly visible)
-- Outcome: **pass**
-
-### 2026-08-05 — iPad Simulator (final shell binary)
-- Device: iPad Pro 13" M5 `D80E9862-…` (iPhone shut down first)
-- Logs (`ipad-sim.log`):
-  - `[app] host: WebGPU (2048x1536…)`
-  - `[ChimpPad] touch overlay installed`
-  - `[ChimpPad] layout kind=tablet size=1024x768 …`
-- Screenshot: `ipad-play.png` shows tablet layout (stick/L/Z left, A/B/R right, C-cluster top-right)
-- Outcome: **pass**
-
-### Fixes applied for skeptic gaps
-1. Touch init only on GL path → also WebGPU `initWebGpu` + SDL window create
-2. `--rom` forced headless automation → iOS interactive unless `--headless-*`
-3. iPhone screenshots predated shell → re-ran after final link
-4. Logs were UIKit-only → capture `simctl launch --console` stderr
-5. macOS input stuck on intro → 900-frame script with A/START; observed menu CAUTION screen
+### macOS (prior + still valid)
+- 900-frame input script → CAUTION Controller Pak screen (`macos-after-input.png`)
+- Unit tests pass (`input-tests.log`)

@@ -68,3 +68,11 @@ embeds the ROM in the bundle.
 scripts/test-unit.sh
 # or: cmake --build build --target chimppad_input_tests && ctest --test-dir build -R chimppad
 ```
+
+## iOS game boot
+
+`scripts/run-ios-sim.sh` copies the ROM into the app Documents container and
+sets `SIMCTL_CHILD_MDKR_ROM` + `SIMCTL_CHILD_MDKR_APP_AUTOPLAY=1` so the
+interactive AppHost boots Diddy Kong Racing with touch controls active.
+Bare `--rom` on desktop is the headless engine path; on iOS, ChimpPad
+prefers autoplay so the overlay stays live.
