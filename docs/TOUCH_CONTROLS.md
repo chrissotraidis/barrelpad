@@ -44,5 +44,17 @@ Adapted from SpaghettiPad quality and behavior; mapped for **Diddy Kong Racing**
 ## Implementation locations
 
 - Pure layout/mapping helpers: `tests/` + shared C/C++ under `ios/` / `src/`
-- UIKit overlay: `ios/ChimpPadTouchControls.*` (patterned on SpaghettiPad shell)
-- Emission: SDL virtual joystick axes/buttons → Golden Balloon pad read path
+- UIKit overlay: `ios/ChimpPadShell.mm` (patterned on SpaghettiPad shell)
+- Emission (primary): `platform_ios_touch_set` → P1 merge in `platform_sdl_min.c`
+  input queue (N64 button bits + ±80 stick). Virtual joystick + keyboard are
+  secondary backups.
+- Title screen: use **ST** (Start), not A — DKR shows “Press Start”.
+- **•••** Menu opens the host ImGui overlay (Escape) and suppresses game pad
+  input while open; close it to resume racing controls.
+
+## Diagnostics
+
+- Logs: `touch action=…`, `pad inject buttons=0x…`, `ios_touch set …`
+- Force inject without UI clicks:
+  `MDKR_IOS_FORCE_PAD=start|a|0x1000` plus optional
+  `MDKR_IOS_FORCE_PAD_DELAY` / `MDKR_IOS_FORCE_PAD_HOLD` (frames).

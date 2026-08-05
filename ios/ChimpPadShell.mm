@@ -17,11 +17,16 @@
 
 #include "ChimpPadTouchControls.h"
 #include "ChimpPadInput.h"
+#include "platform_os.h"
+#include "controller_mapping.h"
 
 static UIWindow *sSDLWindow;
 static SDL_Joystick *sVirtualJoystick;
 static int sVirtualDeviceIndex = -1;
 static std::array<int, kChimpPadActionCount> sActionPressCounts = {};
+static unsigned int sHeldButtons = 0;
+static int sStickX = 0;
+static int sStickY = 0;
 static std::atomic_bool sMenuVisible(false);
 static std::atomic_bool sTouchStickActive(false);
 static std::atomic_bool sGameplayActive(true);
@@ -90,63 +95,109 @@ static SDL_Scancode ChimpPad_ActionScancode(ChimpPadAction action) {
     }
 }
 
-static SDL_GameControllerButton ChimpPad_ActionButton(ChimpPadAction action) {
+static unsigned int ChimpPad_ActionN64Bit(ChimpPadAction action) {
     switch (action) {
-        case kChimpPadActionA:
-            return SDL_CONTROLLER_BUTTON_A;
-        case kChimpPadActionB:
-            return SDL_CONTROLLER_BUTTON_B;
-        case kChimpPadActionL:
-            return SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
-        case kChimpPadActionR:
-            return SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
-        case kChimpPadActionStart:
-            return SDL_CONTROLLER_BUTTON_START;
-        case kChimpPadActionDUp:
-            return SDL_CONTROLLER_BUTTON_DPAD_UP;
-        case kChimpPadActionDDown:
-            return SDL_CONTROLLER_BUTTON_DPAD_DOWN;
-        case kChimpPadActionDLeft:
-            return SDL_CONTROLLER_BUTTON_DPAD_LEFT;
-        case kChimpPadActionDRight:
-            return SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
-        case kChimpPadActionCDown:
-            return SDL_CONTROLLER_BUTTON_X;
-        case kChimpPadActionCLeft:
-            return SDL_CONTROLLER_BUTTON_Y;
-        default:
-            return SDL_CONTROLLER_BUTTON_INVALID;
+        case kChimpPadActionA: return MDKR_N64_A;
+        case kChimpPadActionB: return MDKR_N64_B;
+        case kChimpPadActionL: return MDKR_N64_L;
+        case kChimpPadActionR: return MDKR_N64_R;
+        case kChimpPadActionZ: return MDKR_N64_Z;
+        case kChimpPadActionStart: return MDKR_N64_START;
+        case kChimpPadActionDUp: return MDKR_N64_DU;
+        case kChimpPadActionDDown: return MDKR_N64_DD;
+        case kChimpPadActionDLeft: return MDKR_N64_DL;
+        case kChimpPadActionDRight: return MDKR_N64_DR;
+        case kChimpPadActionCUp: return MDKR_N64_CU;
+        case kChimpPadActionCDown: return MDKR_N64_CD;
+        case kChimpPadActionCLeft: return MDKR_N64_CL;
+        case kChimpPadActionCRight: return MDKR_N64_CR;
+        default: return 0;
+    }
+}
+
+static void ChimpPad_PublishPad(void) {
+    /* Direct P1 merge into the engine input queue — reliable on iOS where a
+     * virtual joystick is not always bound as the game's primary controller. */
+    platform_ios_touch_set(sHeldButtons, sStickX, sStickY, 1);
+    ChimpPad_Log("pad inject buttons=0x%04x stick=%d,%d", sHeldButtons, sStickX,
+                 sStickY);
+}
+
+/* Mirror face/shoulder actions onto the virtual gamepad when attached. */
+static void ChimpPad_EmitVirtualButton(ChimpPadAction action, BOOL pressed) {
+    if (sVirtualJoystick == nullptr) {
+        return;
+    }
+    if (action == kChimpPadActionZ) {
+        SDL_JoystickSetVirtualAxis(
+            sVirtualJoystick, SDL_CONTROLLER_AXIS_TRIGGERLEFT,
+            pressed ? SDL_JOYSTICK_AXIS_MAX : SDL_JOYSTICK_AXIS_MIN);
+        return;
+    }
+    Sint16 axisValue = pressed ? SDL_JOYSTICK_AXIS_MAX : 0;
+    if (action == kChimpPadActionCUp) {
+        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTY,
+                                   (Sint16)(-axisValue));
+        return;
+    }
+    if (action == kChimpPadActionCDown) {
+        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTY,
+                                   axisValue);
+        return;
+    }
+    if (action == kChimpPadActionCLeft) {
+        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTX,
+                                   (Sint16)(-axisValue));
+        return;
+    }
+    if (action == kChimpPadActionCRight) {
+        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTX,
+                                   axisValue);
+        return;
+    }
+    SDL_GameControllerButton button = SDL_CONTROLLER_BUTTON_INVALID;
+    switch (action) {
+        case kChimpPadActionA: button = SDL_CONTROLLER_BUTTON_A; break;
+        case kChimpPadActionB: button = SDL_CONTROLLER_BUTTON_B; break;
+        case kChimpPadActionL: button = SDL_CONTROLLER_BUTTON_LEFTSHOULDER; break;
+        case kChimpPadActionR: button = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER; break;
+        case kChimpPadActionStart: button = SDL_CONTROLLER_BUTTON_START; break;
+        case kChimpPadActionDUp: button = SDL_CONTROLLER_BUTTON_DPAD_UP; break;
+        case kChimpPadActionDDown: button = SDL_CONTROLLER_BUTTON_DPAD_DOWN; break;
+        case kChimpPadActionDLeft: button = SDL_CONTROLLER_BUTTON_DPAD_LEFT; break;
+        case kChimpPadActionDRight: button = SDL_CONTROLLER_BUTTON_DPAD_RIGHT; break;
+        default: break;
+    }
+    if (button != SDL_CONTROLLER_BUTTON_INVALID) {
+        SDL_JoystickSetVirtualButton(sVirtualJoystick, button,
+                                     pressed ? SDL_PRESSED : SDL_RELEASED);
     }
 }
 
 static void ChimpPad_EmitAction(ChimpPadAction action, BOOL pressed) {
     ChimpPad_Log("touch action=%s pressed=%d", ChimpPad_ActionLabel(action),
                  pressed ? 1 : 0);
-    if (action != kChimpPadActionMenu && sVirtualJoystick != nullptr) {
-        if (action == kChimpPadActionZ) {
-            SDL_JoystickSetVirtualAxis(
-                sVirtualJoystick, SDL_CONTROLLER_AXIS_TRIGGERLEFT,
-                pressed ? SDL_JOYSTICK_AXIS_MAX : SDL_JOYSTICK_AXIS_MIN);
-            return;
+    if (action == kChimpPadActionMenu) {
+        /* Escape opens the host ImGui overlay and swallows game pad input while
+         * open. Still emit it so Settings remains reachable. */
+        SDL_Scancode scancode = ChimpPad_ActionScancode(action);
+        if (scancode != SDL_SCANCODE_UNKNOWN) {
+            ChimpPad_PushKey(scancode, pressed);
         }
-        Sint16 axisValue = pressed ? SDL_JOYSTICK_AXIS_MAX : 0;
-        if (action == kChimpPadActionCUp) {
-            SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTY,
-                                       (Sint16)(-axisValue));
-            return;
-        }
-        if (action == kChimpPadActionCRight) {
-            SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTX,
-                                       axisValue);
-            return;
-        }
-        SDL_GameControllerButton button = ChimpPad_ActionButton(action);
-        if (button != SDL_CONTROLLER_BUTTON_INVALID) {
-            SDL_JoystickSetVirtualButton(sVirtualJoystick, button,
-                                         pressed ? SDL_PRESSED : SDL_RELEASED);
-            return;
-        }
+        ChimpPad_Log("menu key (host overlay) pressed=%d", pressed ? 1 : 0);
+        return;
     }
+    unsigned int bit = ChimpPad_ActionN64Bit(action);
+    if (bit != 0) {
+        if (pressed) {
+            sHeldButtons |= bit;
+        } else {
+            sHeldButtons &= ~bit;
+        }
+        ChimpPad_PublishPad();
+    }
+    ChimpPad_EmitVirtualButton(action, pressed);
+    /* Also synthesize keyboard for any host path that still reads keys. */
     SDL_Scancode scancode = ChimpPad_ActionScancode(action);
     if (scancode != SDL_SCANCODE_UNKNOWN) {
         ChimpPad_PushKey(scancode, pressed);
@@ -168,17 +219,22 @@ static void ChimpPad_SetAction(ChimpPadAction action, BOOL pressed) {
 }
 
 static void ChimpPad_SetStickAxes(Sint16 x, Sint16 y) {
+    /* Convert SDL-style axes (±32767, +y down) to N64 ±80, +y up. */
+    int sx = (int)x * 80 / 32767;
+    int sy = -(int)y * 80 / 32767;
+    if (sx < -80) sx = -80;
+    if (sx > 80) sx = 80;
+    if (sy < -80) sy = -80;
+    if (sy > 80) sy = 80;
+    if (sx > -8 && sx < 8) sx = 0;
+    if (sy > -8 && sy < 8) sy = 0;
+    sStickX = sx;
+    sStickY = sy;
+    ChimpPad_PublishPad();
     if (sVirtualJoystick != nullptr) {
         SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTX, x);
         SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTY, y);
-        return;
     }
-    /* Keyboard fallback for stick via host WASD/arrows. */
-    const Sint16 thr = SDL_JOYSTICK_AXIS_MAX / 3;
-    ChimpPad_PushKey(SDL_SCANCODE_LEFT, x < -thr);
-    ChimpPad_PushKey(SDL_SCANCODE_RIGHT, x > thr);
-    ChimpPad_PushKey(SDL_SCANCODE_UP, y < -thr);
-    ChimpPad_PushKey(SDL_SCANCODE_DOWN, y > thr);
 }
 
 static void ChimpPad_AttachVirtualController(void) {
@@ -206,7 +262,17 @@ static void ChimpPad_ResetAllInputs(void) {
             ChimpPad_EmitAction((ChimpPadAction)a, NO);
         }
     }
-    ChimpPad_SetStickAxes(0, 0);
+    sHeldButtons = 0;
+    sStickX = 0;
+    sStickY = 0;
+    /* Keep the touch source enabled so later presses merge immediately. */
+    platform_ios_touch_set(0, 0, 0, sTouchControlsDesired ? 1 : 0);
+    if (sVirtualJoystick != nullptr) {
+        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTX, 0);
+        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTY, 0);
+        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_TRIGGERLEFT,
+                                   SDL_JOYSTICK_AXIS_MIN);
+    }
     sTouchStickActive.store(false);
 }
 
@@ -422,7 +488,14 @@ static void ChimpPad_ResetAllInputs(void) {
 }
 
 - (void)cancelInput {
-    ChimpPad_SetStickAxes(0, 0);
+    /* Stick release must not clear face buttons or disable the touch pad. */
+    sStickX = 0;
+    sStickY = 0;
+    ChimpPad_PublishPad();
+    if (sVirtualJoystick != nullptr) {
+        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTX, 0);
+        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTY, 0);
+    }
     sTouchStickActive.store(false);
     self.knob.center =
         CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
@@ -468,7 +541,7 @@ static CGRect CP_Frame(CGPoint center, CGFloat w, CGFloat h) {
                                                            action:kChimpPadActionZ];
         self.buttonR = [[ChimpPadTouchButton alloc] initWithLabel:@"R"
                                                            action:kChimpPadActionR];
-        self.buttonStart = [[ChimpPadTouchButton alloc] initWithLabel:@"▶"
+        self.buttonStart = [[ChimpPadTouchButton alloc] initWithLabel:@"ST"
                                                                action:kChimpPadActionStart];
         self.cUp = [[ChimpPadTouchButton alloc] initWithLabel:@"▲"
                                                        action:kChimpPadActionCUp];
@@ -523,6 +596,10 @@ static CGRect CP_Frame(CGPoint center, CGFloat w, CGFloat h) {
 
 - (void)layoutSubviews {
     [super layoutSubviews];
+    /* Keep overlay above the SDL/Metal view after surface recreates. */
+    if (self.superview != nil) {
+        [self.superview bringSubviewToFront:self];
+    }
     UIEdgeInsets safe = self.safeAreaInsets;
     CGFloat width = CGRectGetWidth(self.bounds);
     CGFloat height = CGRectGetHeight(self.bounds);
@@ -615,6 +692,7 @@ static void ChimpPad_InstallOverlay(void) {
     sOverlay.alpha = 1.0;
     [sSDLWindow bringSubviewToFront:sOverlay];
     ChimpPad_AttachVirtualController();
+    platform_ios_touch_set(0, 0, 0, 1);
     ChimpPad_ApplyTouchControlsState();
     ChimpPad_Log("touch overlay installed");
 }

@@ -16,8 +16,14 @@ if [ -f "$FULL" ]; then
     echo "[ChimpPad] full patch already applied or not clean; syncing touch sources only"
   fi
 fi
+# Direct P1 pad inject (shell → platform_ios_touch_set → input queue).
+python3 "$ROOT/scripts/ensure-ios-touch-inject.py" "$SRC"
 mkdir -p "$SRC/platform/chimppad"
 cp -f "$ROOT/ios/ChimpPadShell.mm" "$ROOT/ios/ChimpPadTouchControls.h" \
   "$ROOT/src/ChimpPadInput.c" "$ROOT/src/ChimpPadInput.h" \
   "$SRC/platform/chimppad/"
+if [ -f "$ROOT/ios/ChimpPadRomBoot.mm" ]; then
+  cp -f "$ROOT/ios/ChimpPadRomBoot.mm" "$ROOT/ios/ChimpPadRomBoot.h" \
+    "$SRC/platform/chimppad/" 2>/dev/null || true
+fi
 echo "[ChimpPad] chimppad touch sources synced into $SRC/platform/chimppad"
