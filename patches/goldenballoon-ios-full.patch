@@ -1,0 +1,1565 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 814753b..540fb09 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
+ project(mdkr64 C)
+ include(CTest)
+ option(MDKR_BUILD_FUZZERS "Build coverage-guided save-format fuzzers" OFF)
++option(MDKR_IOS_SIMULATOR "ChimpPad: select iOS Simulator wgpu-native prebuilt" OFF)
+ 
+ # The launcher smoke tests share one physical graphics device and their isolated
+ # files do not make concurrent GPU context creation safe.  Apply one named CTest
+@@ -702,7 +703,11 @@ endif()
+ if(NOT EMSCRIPTEN)
+     find_package(PkgConfig REQUIRED)
+     pkg_check_modules(SDL2 REQUIRED sdl2)
+-    if(APPLE)
++    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++        # ChimpPad iOS: WebGPU-only (no desktop OpenGL framework).
++        set(MDKR_IOS 1)
++        set(OPENGL_LIB "")
++    elseif(APPLE)
+         find_library(OPENGL_LIB OpenGL REQUIRED)
+     else()
+         find_package(OpenGL REQUIRED)
+@@ -917,9 +922,14 @@ list(REMOVE_ITEM FAST3D_SOURCES
+     ${CMAKE_SOURCE_DIR}/platform/fast3d/gfx_webgpu_fault.c
+     ${CMAKE_SOURCE_DIR}/platform/fast3d/gfx_webgpu_surface_policy.c
+     ${CMAKE_SOURCE_DIR}/platform/fast3d/gfx_webgpu_shader.c)
+-if(EMSCRIPTEN)
++if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
++    # ChimpPad iOS: WebGPU-only (desktop GL backend is not GLES-compatible).
+     list(REMOVE_ITEM FAST3D_SOURCES ${CMAKE_SOURCE_DIR}/platform/fast3d/gfx_opengl.c)
+ endif()
++if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++    list(APPEND PLATFORM_SOURCES ${CMAKE_SOURCE_DIR}/platform/gfx_opengl_ios_stub.c)
++    list(APPEND PLATFORM_SOURCES ${CMAKE_SOURCE_DIR}/platform/chimppad_ios_main.c)
++endif()
+ if(MDKR_WEBGPU_BACKEND)
+     list(APPEND FAST3D_SOURCES
+         ${CMAKE_SOURCE_DIR}/platform/fast3d/gfx_webgpu.c
+@@ -947,7 +957,7 @@ if(MDKR_APP)
+ endif()
+ 
+ # glad GL loader — desktop only (no GL in the browser build).
+-if(NOT EMSCRIPTEN)
++if(NOT EMSCRIPTEN AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+     set(GLAD_SOURCES ${CMAKE_SOURCE_DIR}/lib/glad/src/glad.c)
+ else()
+     set(GLAD_SOURCES "")
+@@ -1115,7 +1125,18 @@ if(NOT EMSCRIPTEN)
+         endif()
+         target_link_libraries(${MDKR_TARGET} PRIVATE m)
+     endif()
+-    if(APPLE)
++    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++        # WebGPU / Metal only on iOS
++        target_link_libraries(${MDKR_TARGET} PRIVATE
++            "-framework Metal" "-framework QuartzCore" "-framework UIKit"
++            "-framework Foundation" "-framework CoreGraphics" "-framework AudioToolbox"
++            "-framework AVFoundation" "-framework GameController" "-framework CoreHaptics"
++            "-framework CoreMotion" "-framework CoreBluetooth"
++            "-framework OpenGLES"
++            SDL2main)
++        # iOS needs SDL_main entry; do not use SDL_MAIN_HANDLED for the final binary.
++        target_compile_definitions(${MDKR_TARGET} PRIVATE CHIMPPAD_IOS=1)
++    elseif(APPLE)
+         target_link_libraries(${MDKR_TARGET} PRIVATE ${OPENGL_LIB})
+     else()
+         target_link_libraries(${MDKR_TARGET} PRIVATE OpenGL::GL ${CMAKE_DL_LIBS})
+@@ -1181,11 +1202,17 @@ if(NOT EMSCRIPTEN)
+         # Native "open file" panel, one implementation per platform. A
+         # user-selected file is permission-exempt, which is why this replaced
+         # the directory scan that used to trip macOS TCC.
+-        if(APPLE)
++        if(APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+             enable_language(OBJCXX)
+             list(APPEND APP_SOURCES
+                 ${CMAKE_SOURCE_DIR}/platform/app/app_activation_mac.mm
+                 ${CMAKE_SOURCE_DIR}/platform/app/file_dialog_mac.mm)
++        elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++            enable_language(OBJCXX)
++            list(APPEND APP_SOURCES
++                ${CMAKE_SOURCE_DIR}/platform/app/file_dialog_stub.cpp
++                ${CMAKE_SOURCE_DIR}/platform/chimppad/ChimpPadShell.mm
++                ${CMAKE_SOURCE_DIR}/platform/chimppad/ChimpPadInput.c)
+         elseif(WIN32)
+             list(APPEND APP_SOURCES ${CMAKE_SOURCE_DIR}/platform/app/file_dialog_win.cpp)
+         else()
+@@ -1197,6 +1224,15 @@ if(NOT EMSCRIPTEN)
+         endif()
+ 
+         add_library(mdkr64_app STATIC ${IMGUI_SOURCES} ${APP_SOURCES})
++        target_include_directories(mdkr64_app PRIVATE
++            ${CMAKE_SOURCE_DIR}/platform/chimppad)
++
++        if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++            target_compile_definitions(mdkr64_app PRIVATE GLES_SILENCE_DEPRECATION GL_SILENCE_DEPRECATION)
++            # ImGui GLES path emits many deprecation notes on modern SDKs; keep errors for real bugs.
++            target_compile_options(mdkr64_app PRIVATE -Wno-deprecated-declarations)
++            target_link_libraries(mdkr64_app PRIVATE "-framework OpenGLES")
++        endif()
+         target_compile_features(mdkr64_app PRIVATE cxx_std_17)
+         # Keep warnings strict on the launcher code we own without inheriting
+         # that policy into vendored Dear ImGui.  The engine's maintained C
+@@ -1243,7 +1279,11 @@ if(NOT EMSCRIPTEN)
+             target_link_libraries(mdkr64_app PUBLIC ${SDL2_LIBRARIES})
+         endif()
+         target_link_libraries(mdkr64_app PRIVATE Threads::Threads)
+-        if(APPLE)
++        if(APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
++            target_link_libraries(mdkr64_app PUBLIC
++                "-framework UIKit" "-framework Foundation" "-framework OpenGLES"
++                "-framework Metal" "-framework QuartzCore")
++        elseif(APPLE)
+             # AppKit: NSOpenPanel. UniformTypeIdentifiers: the UTType extension
+             # filter available throughout the supported macOS 13+ range.
+             target_link_libraries(mdkr64_app PUBLIC
+diff --git a/cmake/webgpu.cmake b/cmake/webgpu.cmake
+index ad872c5..8b3a009 100644
+--- a/cmake/webgpu.cmake
++++ b/cmake/webgpu.cmake
+@@ -38,6 +38,9 @@ set(_wgpu_base "https://github.com/gfx-rs/wgpu-native/releases/download/${WGPU_N
+ include("${CMAKE_CURRENT_LIST_DIR}/webgpu_artifact.cmake")
+ if(APPLE)
+     set(_wgpu_os Darwin)
++    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++        set(_wgpu_os iOS)
++    endif()
+     set(_wgpu_abi apple)
+ elseif(WIN32)
+     set(_wgpu_os Windows)
+@@ -55,8 +58,15 @@ else()
+     set(_wgpu_os "${CMAKE_SYSTEM_NAME}")
+     set(_wgpu_abi "${CMAKE_C_COMPILER_ID}")
+ endif()
++set(_wgpu_cpu "${CMAKE_SYSTEM_PROCESSOR}")
++if(_wgpu_cpu STREQUAL "" AND CMAKE_OSX_ARCHITECTURES)
++    list(GET CMAKE_OSX_ARCHITECTURES 0 _wgpu_cpu)
++endif()
++if(_wgpu_cpu STREQUAL "")
++    set(_wgpu_cpu "arm64")
++endif()
+ mdkr_select_wgpu_artifact(
+-    "${_wgpu_os}" "${CMAKE_SYSTEM_PROCESSOR}" "${_wgpu_abi}"
++    "${_wgpu_os}" "${_wgpu_cpu}" "${_wgpu_abi}"
+     _wgpu_supported _wgpu_asset _wgpu_sha _wgpu_reason)
+ if(NOT _wgpu_supported)
+     message(FATAL_ERROR
+@@ -107,7 +117,13 @@ else()
+     target_link_libraries(webgpu INTERFACE "${wgpu_native_SOURCE_DIR}/lib/libwgpu_native.a")
+ endif()
+ 
+-if(APPLE)
++if(APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
++    # iOS Simulator / device wgpu-native (Metal) — no AppKit/IOKit.
++    target_link_libraries(webgpu INTERFACE
++        "-framework Metal" "-framework QuartzCore" "-framework Foundation"
++        "-framework CoreFoundation" "-framework UIKit"
++        "-framework CoreGraphics" "-framework Security")
++elseif(APPLE)
+     # System frameworks the wgpu-native static lib references (Metal backend + the
+     # Rust std runtime).
+     target_link_libraries(webgpu INTERFACE
+diff --git a/cmake/webgpu_artifact.cmake b/cmake/webgpu_artifact.cmake
+index b10af08..c764c03 100644
+--- a/cmake/webgpu_artifact.cmake
++++ b/cmake/webgpu_artifact.cmake
+@@ -25,6 +25,19 @@ function(mdkr_select_wgpu_artifact os cpu abi out_supported out_asset out_sha ou
+         else()
+             set(_supported FALSE)
+         endif()
++    elseif(os STREQUAL "iOS" AND _abi STREQUAL "apple")
++        # ChimpPad: iOS Simulator prebuilts from wgpu-native v29.0.1.1
++        if(DEFINED MDKR_IOS_SIMULATOR AND MDKR_IOS_SIMULATOR)
++            if(_cpu MATCHES "^(arm64|aarch64)$")
++                set(_asset "wgpu-ios-aarch64-simulator-release.zip")
++                set(_sha "750e706765bef3744313745194774d095c916fc21d2a0e7d4d7b0bc4d0c92789")
++            else()
++                set(_supported FALSE)
++            endif()
++        else()
++            set(_supported FALSE)
++            set(_reason "iOS device wgpu not enabled; set MDKR_IOS_SIMULATOR=ON for Simulator")
++        endif()
+     elseif(os STREQUAL "Linux" AND _abi STREQUAL "gnu")
+         if(_cpu MATCHES "^(arm64|aarch64)$")
+             set(_asset "wgpu-linux-aarch64-release.zip")
+diff --git a/platform/app/app_activation.h b/platform/app/app_activation.h
+index b6abdcf..70d8bf6 100644
+--- a/platform/app/app_activation.h
++++ b/platform/app/app_activation.h
+@@ -5,6 +5,10 @@
+ #include <SDL.h>
+ 
+ #if defined(__APPLE__)
++#  include <TargetConditionals.h>
++#endif
++
++#if defined(__APPLE__) && !TARGET_OS_IOS
+ void AppActivation_requestForeground(SDL_Window *window, void *nativeView = nullptr);
+ #else
+ inline void AppActivation_requestForeground(SDL_Window *window, void *nativeView = nullptr) {
+diff --git a/platform/app/app_host.cpp b/platform/app/app_host.cpp
+index 055d0d2..f97d943 100644
+--- a/platform/app/app_host.cpp
++++ b/platform/app/app_host.cpp
+@@ -1,5 +1,11 @@
+ // app_host.cpp — see app_host.h.
+ #include "app_host.h"
++#if defined(__APPLE__)
++#include <TargetConditionals.h>
++#if TARGET_OS_IOS
++#include "ChimpPadTouchControls.h"
++#endif
++#endif
+ #include "fs_utf8.h"
+ #include "app_activation.h"
+ #include "app_theme.h"
+@@ -19,7 +25,16 @@
+ #include <vector>
+ 
+ #if defined(__APPLE__)
+-#  include <OpenGL/gl3.h>
++#  include <TargetConditionals.h>
++#  if TARGET_OS_IOS
++#    ifndef GLES_SILENCE_DEPRECATION
++#      define GLES_SILENCE_DEPRECATION 1
++#    endif
++#    include <OpenGLES/ES3/gl.h>
++#    include <OpenGLES/ES3/glext.h>
++#  else
++#    include <OpenGL/gl3.h>
++#  endif
+ #else
+ // Non-Apple: the engine uses glad; the app shell resolves GL via SDL. We only
+ // call a couple of raw GL entry points (glClear/glViewport), declared here to
+@@ -43,7 +58,14 @@
+ 
+ // The GLSL version string handed to the ImGui GL3 backend. Matches the engine's
+ // "#version 330 core" shaders; valid on the macOS 4.1-core context too.
++#if defined(__APPLE__)
++#  include <TargetConditionals.h>
++#endif
++#if defined(__APPLE__) && TARGET_OS_IOS
++static const char *kGlslVersion = "#version 300 es";
++#else
+ static const char *kGlslVersion = "#version 330 core";
++#endif
+ 
+ static void bindSmokeGamepadToImGui(SDL_GameController *gamepad) {
+     if (gamepad == nullptr) {
+@@ -196,6 +218,12 @@ bool AppHost::initGL(const char *title, int width, int height) {
+     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+     AppTheme::setup(framebufferScale());
++#if defined(__APPLE__) && TARGET_OS_IOS
++    ChimpPad_OnWindowCreated(window_);
++    ChimpPad_InitializeTouchControls();
++    ChimpPad_SetGameplayActive(1);
++#endif
++
+     if (!ImGui_ImplSDL2_InitForOpenGL(window_, gl_)) {
+         std::fprintf(stderr, "[app] ImGui_ImplSDL2_InitForOpenGL failed\n");
+         return false;
+diff --git a/platform/chimppad/ChimpPadInput.c b/platform/chimppad/ChimpPadInput.c
+new file mode 100644
+index 0000000..4d3bfdb
+--- /dev/null
++++ b/platform/chimppad/ChimpPadInput.c
+@@ -0,0 +1,348 @@
++#include "ChimpPadInput.h"
++
++#include <math.h>
++#include <string.h>
++
++#ifndef CHIMPPAD_PI
++#define CHIMPPAD_PI 3.14159265358979323846f
++#endif
++
++static float clampf(float v, float lo, float hi) {
++    if (v < lo) {
++        return lo;
++    }
++    if (v > hi) {
++        return hi;
++    }
++    return v;
++}
++
++ChimpPadStickState ChimpPad_StickFromTouch(float dx, float dy, float radius) {
++    ChimpPadStickState s = {0.f, 0.f};
++    if (radius <= 1.f) {
++        return s;
++    }
++    /* UIKit y grows down; N64 stick y is +up. Invert dy. */
++    float nx = dx / radius;
++    float ny = -dy / radius;
++    float mag = sqrtf(nx * nx + ny * ny);
++    if (mag > 1.f && mag > 0.f) {
++        nx /= mag;
++        ny /= mag;
++    }
++    /* Small deadzone so resting finger does not drift menus. */
++    const float dead = 0.08f;
++    if (fabsf(nx) < dead) {
++        nx = 0.f;
++    }
++    if (fabsf(ny) < dead) {
++        ny = 0.f;
++    }
++    s.x = clampf(nx, -1.f, 1.f);
++    s.y = clampf(ny, -1.f, 1.f);
++    return s;
++}
++
++void ChimpPad_StickToN64(ChimpPadStickState s, int8_t *outX, int8_t *outY) {
++    /* Golden Balloon scales SDL ±32767 → approx ±80; we match ±80 directly. */
++    float x = clampf(s.x, -1.f, 1.f) * 80.f;
++    float y = clampf(s.y, -1.f, 1.f) * 80.f;
++    if (outX) {
++        *outX = (int8_t)lroundf(x);
++    }
++    if (outY) {
++        *outY = (int8_t)lroundf(y);
++    }
++}
++
++ChimpPadLayoutRect ChimpPad_SafeAreaBounds(ChimpPadSafeArea safe) {
++    ChimpPadLayoutRect r;
++    r.x = safe.left;
++    r.y = safe.top;
++    r.w = safe.width - safe.left - safe.right;
++    r.h = safe.height - safe.top - safe.bottom;
++    if (r.w < 1.f) {
++        r.w = 1.f;
++    }
++    if (r.h < 1.f) {
++        r.h = 1.f;
++    }
++    return r;
++}
++
++ChimpPadLayoutKind ChimpPad_LayoutKindForSize(float width, float height) {
++    float shortSide = width < height ? width : height;
++    /* iPad mini short side ~744 pt; phones ≤ 500 pt short side landscape height. */
++    if (shortSide >= 600.f) {
++        return kChimpPadLayoutTablet;
++    }
++    return kChimpPadLayoutPhone;
++}
++
++ChimpPadLayoutRect ChimpPad_AbsoluteRect(ChimpPadLayoutRect bounds,
++                                         ChimpPadLayoutRect normalized) {
++    ChimpPadLayoutRect r;
++    r.x = bounds.x + normalized.x * bounds.w;
++    r.y = bounds.y + normalized.y * bounds.h;
++    r.w = normalized.w * bounds.w;
++    r.h = normalized.h * bounds.h;
++    return r;
++}
++
++const char *ChimpPad_ActionLabel(ChimpPadAction action) {
++    switch (action) {
++        case kChimpPadActionA:
++            return "A";
++        case kChimpPadActionB:
++            return "B";
++        case kChimpPadActionL:
++            return "L";
++        case kChimpPadActionR:
++            return "R";
++        case kChimpPadActionZ:
++            return "Z";
++        case kChimpPadActionStart:
++            return "Start";
++        case kChimpPadActionDUp:
++            return "D-Up";
++        case kChimpPadActionDDown:
++            return "D-Down";
++        case kChimpPadActionDLeft:
++            return "D-Left";
++        case kChimpPadActionDRight:
++            return "D-Right";
++        case kChimpPadActionCUp:
++            return "C-Up";
++        case kChimpPadActionCDown:
++            return "C-Down";
++        case kChimpPadActionCLeft:
++            return "C-Left";
++        case kChimpPadActionCRight:
++            return "C-Right";
++        case kChimpPadActionMenu:
++            return "Menu";
++        default:
++            return "?";
++    }
++}
++
++const char *ChimpPad_HostKeyToken(ChimpPadAction action) {
++    /* Matches Golden Balloon platform_sdl_min.c keyboard map. */
++    switch (action) {
++        case kChimpPadActionA:
++            return "X"; /* accelerate */
++        case kChimpPadActionB:
++            return "Z"; /* brake */
++        case kChimpPadActionL:
++            return "Q";
++        case kChimpPadActionR:
++            return "SPACE"; /* hop / slide */
++        case kChimpPadActionZ:
++            return "SHIFT"; /* item */
++        case kChimpPadActionStart:
++            return "RETURN";
++        case kChimpPadActionCUp:
++            return "I";
++        case kChimpPadActionCDown:
++            return "K";
++        case kChimpPadActionCLeft:
++            return "J";
++        case kChimpPadActionCRight:
++            return "L";
++        case kChimpPadActionDUp:
++            return "UP";
++        case kChimpPadActionDDown:
++            return "DOWN";
++        case kChimpPadActionDLeft:
++            return "LEFT";
++        case kChimpPadActionDRight:
++            return "RIGHT";
++        case kChimpPadActionMenu:
++            return "ESCAPE";
++        default:
++            return "";
++    }
++}
++
++void ChimpPad_HoldAssistInit(ChimpPadHoldAssist *h, double thresholdSec) {
++    if (!h) {
++        return;
++    }
++    memset(h, 0, sizeof(*h));
++    h->enabled = true;
++    h->holdThresholdSec = thresholdSec > 0.05 ? thresholdSec : 0.65;
++}
++
++bool ChimpPad_HoldAssistOnA(ChimpPadHoldAssist *h, bool fingerDown, double nowSec) {
++    if (!h || !h->enabled) {
++        return fingerDown;
++    }
++    if (fingerDown) {
++        if (!h->fingerDown) {
++            h->fingerDown = true;
++            h->downTime = nowSec;
++            /* Tap while locked releases. */
++            if (h->locked) {
++                h->locked = false;
++                return false;
++            }
++        } else if (!h->locked &&
++                   (nowSec - h->downTime) >= h->holdThresholdSec) {
++            h->locked = true;
++        }
++        return true;
++    }
++    /* Finger up: if locked, keep A; else release. */
++    h->fingerDown = false;
++    return h->locked;
++}
++
++void ChimpPad_HoldAssistForceRelease(ChimpPadHoldAssist *h) {
++    if (!h) {
++        return;
++    }
++    h->locked = false;
++    h->fingerDown = false;
++    h->downTime = 0.0;
++}
++
++int ChimpPad_DefaultLayout(ChimpPadLayoutKind kind,
++                           ChimpPadControlSpec *outSpecs,
++                           int maxSpecs) {
++    if (!outSpecs || maxSpecs <= 0) {
++        return 0;
++    }
++
++    /* Normalized rects: x,y top-left of control, w,h size relative to safe area.
++     * Stick left; A/B/Z/R right; C cluster upper-right; Start/Menu top-right. */
++    enum { kMax = 16 };
++    ChimpPadControlSpec phone[kMax];
++    ChimpPadControlSpec tablet[kMax];
++    int n = 0;
++
++    /* Shared skeleton; phone uses larger primary hit targets. */
++    ChimpPadControlSpec *dst = (kind == kChimpPadLayoutTablet) ? tablet : phone;
++
++    dst[n++] = (ChimpPadControlSpec){
++        .action = kChimpPadActionA, /* placeholder; isStick marks well */
++        .label = "Stick",
++        .rect = {.x = 0.04f, .y = 0.42f, .w = 0.22f, .h = 0.42f},
++        .isStick = true,
++    };
++    dst[n++] = (ChimpPadControlSpec){
++        .action = kChimpPadActionL,
++        .label = "L",
++        .rect = {.x = 0.04f, .y = 0.18f, .w = 0.09f, .h = 0.12f},
++        .isStick = false,
++    };
++    dst[n++] = (ChimpPadControlSpec){
++        .action = kChimpPadActionZ,
++        .label = "Z",
++        .rect = {.x = 0.15f, .y = 0.18f, .w = 0.09f, .h = 0.12f},
++        .isStick = false,
++    };
++
++    if (kind == kChimpPadLayoutPhone) {
++        /* Enlarged A / B / R for thumb reach (DKR accelerate / brake / hop). */
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionA,
++            .label = "A",
++            .rect = {.x = 0.72f, .y = 0.52f, .w = 0.14f, .h = 0.22f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionB,
++            .label = "B",
++            .rect = {.x = 0.58f, .y = 0.58f, .w = 0.12f, .h = 0.18f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionR,
++            .label = "R",
++            .rect = {.x = 0.78f, .y = 0.30f, .w = 0.12f, .h = 0.14f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionCUp,
++            .label = "C↑",
++            .rect = {.x = 0.70f, .y = 0.14f, .w = 0.07f, .h = 0.09f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionCDown,
++            .label = "C↓",
++            .rect = {.x = 0.70f, .y = 0.28f, .w = 0.07f, .h = 0.09f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionCLeft,
++            .label = "C←",
++            .rect = {.x = 0.62f, .y = 0.21f, .w = 0.07f, .h = 0.09f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionCRight,
++            .label = "C→",
++            .rect = {.x = 0.78f, .y = 0.21f, .w = 0.07f, .h = 0.09f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionStart,
++            .label = "Start",
++            .rect = {.x = 0.86f, .y = 0.06f, .w = 0.10f, .h = 0.08f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionMenu,
++            .label = "•••",
++            .rect = {.x = 0.86f, .y = 0.00f, .w = 0.10f, .h = 0.06f},
++        };
++    } else {
++        /* Tablet: more margin, slightly larger C cluster. */
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionA,
++            .label = "A",
++            .rect = {.x = 0.78f, .y = 0.50f, .w = 0.12f, .h = 0.20f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionB,
++            .label = "B",
++            .rect = {.x = 0.66f, .y = 0.56f, .w = 0.10f, .h = 0.16f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionR,
++            .label = "R",
++            .rect = {.x = 0.82f, .y = 0.28f, .w = 0.10f, .h = 0.12f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionCUp,
++            .label = "C↑",
++            .rect = {.x = 0.74f, .y = 0.16f, .w = 0.06f, .h = 0.08f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionCDown,
++            .label = "C↓",
++            .rect = {.x = 0.74f, .y = 0.28f, .w = 0.06f, .h = 0.08f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionCLeft,
++            .label = "C←",
++            .rect = {.x = 0.67f, .y = 0.22f, .w = 0.06f, .h = 0.08f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionCRight,
++            .label = "C→",
++            .rect = {.x = 0.81f, .y = 0.22f, .w = 0.06f, .h = 0.08f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionStart,
++            .label = "Start",
++            .rect = {.x = 0.88f, .y = 0.08f, .w = 0.08f, .h = 0.07f},
++        };
++        dst[n++] = (ChimpPadControlSpec){
++            .action = kChimpPadActionMenu,
++            .label = "•••",
++            .rect = {.x = 0.88f, .y = 0.01f, .w = 0.08f, .h = 0.06f},
++        };
++        /* Enlarge stick well slightly on tablet. */
++        dst[0].rect = (ChimpPadLayoutRect){.x = 0.05f, .y = 0.40f, .w = 0.20f, .h = 0.40f};
++        dst[1].rect = (ChimpPadLayoutRect){.x = 0.05f, .y = 0.20f, .w = 0.08f, .h = 0.10f};
++        dst[2].rect = (ChimpPadLayoutRect){.x = 0.15f, .y = 0.20f, .w = 0.08f, .h = 0.10f};
++    }
++
++    int count = n < maxSpecs ? n : maxSpecs;
++    memcpy(outSpecs, dst, (size_t)count * sizeof(ChimpPadControlSpec));
++    return count;
++}
+diff --git a/platform/chimppad/ChimpPadInput.h b/platform/chimppad/ChimpPadInput.h
+new file mode 100644
+index 0000000..65ddea8
+--- /dev/null
++++ b/platform/chimppad/ChimpPadInput.h
+@@ -0,0 +1,110 @@
++#pragma once
++
++#include <stdbool.h>
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/* DKR / N64 virtual pad actions exposed to touch and tests. */
++typedef enum ChimpPadAction {
++    kChimpPadActionA = 0,
++    kChimpPadActionB,
++    kChimpPadActionL,
++    kChimpPadActionR,
++    kChimpPadActionZ,
++    kChimpPadActionStart,
++    kChimpPadActionDUp,
++    kChimpPadActionDDown,
++    kChimpPadActionDLeft,
++    kChimpPadActionDRight,
++    kChimpPadActionCUp,
++    kChimpPadActionCDown,
++    kChimpPadActionCLeft,
++    kChimpPadActionCRight,
++    kChimpPadActionMenu,
++    kChimpPadActionCount
++} ChimpPadAction;
++
++typedef enum ChimpPadLayoutKind {
++    kChimpPadLayoutPhone = 0,
++    kChimpPadLayoutTablet = 1
++} ChimpPadLayoutKind;
++
++/* Normalized layout rect in landscape UI coordinates: origin top-left,
++ * x/y in [0,1], width/height relative to short/long edges of the safe area. */
++typedef struct ChimpPadLayoutRect {
++    float x;
++    float y;
++    float w;
++    float h;
++} ChimpPadLayoutRect;
++
++typedef struct ChimpPadControlSpec {
++    ChimpPadAction action;
++    const char *label;
++    ChimpPadLayoutRect rect;
++    bool isStick; /* when true, rect is the stick well; action ignored for stick */
++} ChimpPadControlSpec;
++
++/* Stick: N64-style range approximately ±80 after host scaling; we expose
++ * normalized [-1,1] and mapped int8 for tests. */
++typedef struct ChimpPadStickState {
++    float x; /* -1 .. 1, +right */
++    float y; /* -1 .. 1, +up (N64 convention for DKR menus) */
++} ChimpPadStickState;
++
++/* Map a touch delta inside a stick well to stick state.
++ * dx/dy are offsets from well center in points; radius is well radius. */
++ChimpPadStickState ChimpPad_StickFromTouch(float dx, float dy, float radius);
++
++/* Clamp and quantize stick to N64-ish ±80 int8. */
++void ChimpPad_StickToN64(ChimpPadStickState s, int8_t *outX, int8_t *outY);
++
++/* Safe-area inset application: shrinks a full window into a usable rect. */
++typedef struct ChimpPadSafeArea {
++    float left, top, right, bottom; /* points inset from window edges */
++    float width, height;            /* full window size in points */
++} ChimpPadSafeArea;
++
++ChimpPadLayoutRect ChimpPad_SafeAreaBounds(ChimpPadSafeArea safe);
++
++/* Default control layouts for phone vs tablet (landscape).
++ * Writes up to maxSpecs entries; returns count. Stick is always index 0. */
++int ChimpPad_DefaultLayout(ChimpPadLayoutKind kind,
++                           ChimpPadControlSpec *outSpecs,
++                           int maxSpecs);
++
++/* Choose phone vs tablet from window size (points). */
++ChimpPadLayoutKind ChimpPad_LayoutKindForSize(float width, float height);
++
++/* Convert normalized layout rect into absolute points within safe bounds. */
++ChimpPadLayoutRect ChimpPad_AbsoluteRect(ChimpPadLayoutRect bounds,
++                                         ChimpPadLayoutRect normalized);
++
++/* DKR keyboard scancode names used by Golden Balloon host (for docs/tests).
++ * Returns a stable token string for logging. */
++const char *ChimpPad_ActionLabel(ChimpPadAction action);
++
++/* Golden Balloon default keyboard binding tokens (X=A accel, Z=B brake, …). */
++const char *ChimpPad_HostKeyToken(ChimpPadAction action);
++
++/* A-hold assist: after holdSeconds of continuous A, lock until tapped again.
++ * Pure state machine for unit tests. */
++typedef struct ChimpPadHoldAssist {
++    bool enabled;
++    bool locked;
++    bool fingerDown;
++    double downTime;
++    double holdThresholdSec;
++} ChimpPadHoldAssist;
++
++void ChimpPad_HoldAssistInit(ChimpPadHoldAssist *h, double thresholdSec);
++/* Returns whether A should be considered pressed after this event. */
++bool ChimpPad_HoldAssistOnA(ChimpPadHoldAssist *h, bool fingerDown, double nowSec);
++void ChimpPad_HoldAssistForceRelease(ChimpPadHoldAssist *h);
++
++#ifdef __cplusplus
++}
++#endif
+diff --git a/platform/chimppad/ChimpPadShell.mm b/platform/chimppad/ChimpPadShell.mm
+new file mode 100644
+index 0000000..82365e8
+--- /dev/null
++++ b/platform/chimppad/ChimpPadShell.mm
+@@ -0,0 +1,683 @@
++/*
++ * ChimpPad iOS/iPadOS shell: touch overlay + virtual controller emission.
++ * Patterns adapted from SpaghettiPad; mappings tuned for Diddy Kong Racing
++ * (Golden Balloon host keyboard/gamepad map).
++ */
++#import <UIKit/UIKit.h>
++#include <TargetConditionals.h>
++
++#include <array>
++#include <atomic>
++#include <cmath>
++#include <cstdarg>
++#include <cstdio>
++
++#include <SDL.h>
++#include <SDL_syswm.h>
++
++#include "ChimpPadTouchControls.h"
++#include "ChimpPadInput.h"
++
++static UIWindow *sSDLWindow;
++static SDL_Joystick *sVirtualJoystick;
++static int sVirtualDeviceIndex = -1;
++static std::array<int, kChimpPadActionCount> sActionPressCounts = {};
++static std::atomic_bool sMenuVisible(false);
++static std::atomic_bool sTouchStickActive(false);
++static std::atomic_bool sGameplayActive(true);
++static BOOL sTouchControlsDesired = YES;
++
++void ChimpPad_Log(const char *fmt, ...) {
++    char buf[1024];
++    va_list ap;
++    va_start(ap, fmt);
++    vsnprintf(buf, sizeof(buf), fmt, ap);
++    va_end(ap);
++    NSLog(@"[ChimpPad] %s", buf);
++    SDL_Log("[ChimpPad] %s", buf);
++}
++
++static void ChimpPad_PushKey(SDL_Scancode scancode, BOOL pressed) {
++    SDL_Event event = {};
++    event.type = pressed ? SDL_KEYDOWN : SDL_KEYUP;
++    event.key.timestamp = SDL_GetTicks();
++    event.key.state = pressed ? SDL_PRESSED : SDL_RELEASED;
++    event.key.repeat = 0;
++    event.key.keysym.scancode = scancode;
++    event.key.keysym.sym = SDL_GetKeyFromScancode(scancode);
++    SDL_Window *window = SDL_GetKeyboardFocus();
++    if (window != nullptr) {
++        event.key.windowID = SDL_GetWindowID(window);
++    }
++    SDL_PushEvent(&event);
++}
++
++/* Map actions to Golden Balloon keyboard defaults (platform_sdl_min.c). */
++static SDL_Scancode ChimpPad_ActionScancode(ChimpPadAction action) {
++    switch (action) {
++        case kChimpPadActionA:
++            return SDL_SCANCODE_X; /* accelerate */
++        case kChimpPadActionB:
++            return SDL_SCANCODE_Z; /* brake */
++        case kChimpPadActionL:
++            return SDL_SCANCODE_Q;
++        case kChimpPadActionR:
++            return SDL_SCANCODE_SPACE; /* hop / slide */
++        case kChimpPadActionZ:
++            return SDL_SCANCODE_LSHIFT; /* item */
++        case kChimpPadActionStart:
++            return SDL_SCANCODE_RETURN;
++        case kChimpPadActionDUp:
++            return SDL_SCANCODE_UP;
++        case kChimpPadActionDDown:
++            return SDL_SCANCODE_DOWN;
++        case kChimpPadActionDLeft:
++            return SDL_SCANCODE_LEFT;
++        case kChimpPadActionDRight:
++            return SDL_SCANCODE_RIGHT;
++        case kChimpPadActionCUp:
++            return SDL_SCANCODE_I;
++        case kChimpPadActionCDown:
++            return SDL_SCANCODE_K;
++        case kChimpPadActionCLeft:
++            return SDL_SCANCODE_J;
++        case kChimpPadActionCRight:
++            return SDL_SCANCODE_L;
++        case kChimpPadActionMenu:
++            return SDL_SCANCODE_ESCAPE;
++        default:
++            return SDL_SCANCODE_UNKNOWN;
++    }
++}
++
++static SDL_GameControllerButton ChimpPad_ActionButton(ChimpPadAction action) {
++    switch (action) {
++        case kChimpPadActionA:
++            return SDL_CONTROLLER_BUTTON_A;
++        case kChimpPadActionB:
++            return SDL_CONTROLLER_BUTTON_B;
++        case kChimpPadActionL:
++            return SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
++        case kChimpPadActionR:
++            return SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
++        case kChimpPadActionStart:
++            return SDL_CONTROLLER_BUTTON_START;
++        case kChimpPadActionDUp:
++            return SDL_CONTROLLER_BUTTON_DPAD_UP;
++        case kChimpPadActionDDown:
++            return SDL_CONTROLLER_BUTTON_DPAD_DOWN;
++        case kChimpPadActionDLeft:
++            return SDL_CONTROLLER_BUTTON_DPAD_LEFT;
++        case kChimpPadActionDRight:
++            return SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
++        case kChimpPadActionCDown:
++            return SDL_CONTROLLER_BUTTON_X;
++        case kChimpPadActionCLeft:
++            return SDL_CONTROLLER_BUTTON_Y;
++        default:
++            return SDL_CONTROLLER_BUTTON_INVALID;
++    }
++}
++
++static void ChimpPad_EmitAction(ChimpPadAction action, BOOL pressed) {
++    ChimpPad_Log("touch action=%s pressed=%d", ChimpPad_ActionLabel(action),
++                 pressed ? 1 : 0);
++    if (action != kChimpPadActionMenu && sVirtualJoystick != nullptr) {
++        if (action == kChimpPadActionZ) {
++            SDL_JoystickSetVirtualAxis(
++                sVirtualJoystick, SDL_CONTROLLER_AXIS_TRIGGERLEFT,
++                pressed ? SDL_JOYSTICK_AXIS_MAX : SDL_JOYSTICK_AXIS_MIN);
++            return;
++        }
++        Sint16 axisValue = pressed ? SDL_JOYSTICK_AXIS_MAX : 0;
++        if (action == kChimpPadActionCUp) {
++            SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTY,
++                                       (Sint16)(-axisValue));
++            return;
++        }
++        if (action == kChimpPadActionCRight) {
++            SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTX,
++                                       axisValue);
++            return;
++        }
++        SDL_GameControllerButton button = ChimpPad_ActionButton(action);
++        if (button != SDL_CONTROLLER_BUTTON_INVALID) {
++            SDL_JoystickSetVirtualButton(sVirtualJoystick, button,
++                                         pressed ? SDL_PRESSED : SDL_RELEASED);
++            return;
++        }
++    }
++    SDL_Scancode scancode = ChimpPad_ActionScancode(action);
++    if (scancode != SDL_SCANCODE_UNKNOWN) {
++        ChimpPad_PushKey(scancode, pressed);
++    }
++}
++
++static void ChimpPad_SetAction(ChimpPadAction action, BOOL pressed) {
++    int &count = sActionPressCounts[action];
++    BOOL wasPressed = count > 0;
++    if (pressed) {
++        count += 1;
++    } else {
++        count = MAX(0, count - 1);
++    }
++    BOOL isPressed = count > 0;
++    if (wasPressed != isPressed) {
++        ChimpPad_EmitAction(action, isPressed);
++    }
++}
++
++static void ChimpPad_SetStickAxes(Sint16 x, Sint16 y) {
++    if (sVirtualJoystick != nullptr) {
++        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTX, x);
++        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTY, y);
++        return;
++    }
++    /* Keyboard fallback for stick via host WASD/arrows. */
++    const Sint16 thr = SDL_JOYSTICK_AXIS_MAX / 3;
++    ChimpPad_PushKey(SDL_SCANCODE_LEFT, x < -thr);
++    ChimpPad_PushKey(SDL_SCANCODE_RIGHT, x > thr);
++    ChimpPad_PushKey(SDL_SCANCODE_UP, y < -thr);
++    ChimpPad_PushKey(SDL_SCANCODE_DOWN, y > thr);
++}
++
++static void ChimpPad_AttachVirtualController(void) {
++    if (sVirtualJoystick != nullptr) {
++        return;
++    }
++    sVirtualDeviceIndex = SDL_JoystickAttachVirtual(
++        SDL_JOYSTICK_TYPE_GAMECONTROLLER, 6, 16, 0);
++    if (sVirtualDeviceIndex < 0) {
++        ChimpPad_Log("virtual joystick attach failed: %s", SDL_GetError());
++        return;
++    }
++    sVirtualJoystick = SDL_JoystickOpen(sVirtualDeviceIndex);
++    if (sVirtualJoystick == nullptr) {
++        ChimpPad_Log("virtual joystick open failed: %s", SDL_GetError());
++        return;
++    }
++    ChimpPad_Log("virtual controller attached index=%d", sVirtualDeviceIndex);
++}
++
++static void ChimpPad_ResetAllInputs(void) {
++    for (int a = 0; a < kChimpPadActionCount; ++a) {
++        if (sActionPressCounts[a] > 0) {
++            sActionPressCounts[a] = 0;
++            ChimpPad_EmitAction((ChimpPadAction)a, NO);
++        }
++    }
++    ChimpPad_SetStickAxes(0, 0);
++    sTouchStickActive.store(false);
++}
++
++@interface ChimpPadTouchButton : UIButton
++@property(nonatomic) ChimpPadAction action;
++@property(nonatomic) BOOL inputPressed;
++@property(nonatomic) BOOL outputPressed;
++@property(nonatomic) BOOL holdAssistEnabled;
++@property(nonatomic) BOOL holdLocked;
++@property(nonatomic) CFTimeInterval inputDownTime;
++@property(nonatomic) NSUInteger releaseGeneration;
++@property(nonatomic, copy) NSString *normalLabel;
++@property(nonatomic, strong) UIColor *idleColor;
++@property(nonatomic, strong) UIColor *pressedColor;
++- (instancetype)initWithLabel:(NSString *)label action:(ChimpPadAction)action;
++- (void)applyIdleColor:(UIColor *)idle pressedColor:(UIColor *)pressed;
++- (void)cancelInput;
++@end
++
++@implementation ChimpPadTouchButton
++- (instancetype)initWithLabel:(NSString *)label action:(ChimpPadAction)action {
++    self = [super initWithFrame:CGRectZero];
++    if (self) {
++        self.action = action;
++        self.normalLabel = label;
++        self.multipleTouchEnabled = YES;
++        self.idleColor = [UIColor colorWithWhite:0.04 alpha:0.38];
++        self.pressedColor = [UIColor colorWithWhite:0.72 alpha:0.48];
++        self.backgroundColor = self.idleColor;
++        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.58].CGColor;
++        self.layer.borderWidth = 2.0;
++        [self setTitle:label forState:UIControlStateNormal];
++        [self setTitleColor:[UIColor colorWithWhite:1.0 alpha:0.92]
++                   forState:UIControlStateNormal];
++        self.titleLabel.font =
++            [UIFont systemFontOfSize:17.0 weight:UIFontWeightSemibold];
++        self.accessibilityLabel = label;
++        [self addTarget:self
++                      action:@selector(inputDown)
++            forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
++        [self addTarget:self
++                      action:@selector(inputUp)
++            forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside |
++                             UIControlEventTouchCancel | UIControlEventTouchDragExit];
++    }
++    return self;
++}
++
++- (void)layoutSubviews {
++    [super layoutSubviews];
++    CGFloat m = MIN(CGRectGetWidth(self.bounds), CGRectGetHeight(self.bounds));
++    self.layer.cornerRadius = m * 0.5;
++}
++
++- (void)inputDown {
++    self.releaseGeneration += 1;
++    if (self.inputPressed) {
++        return;
++    }
++    BOOL wasLocked = self.holdLocked;
++    self.holdLocked = NO;
++    self.inputPressed = YES;
++    self.inputDownTime = CACurrentMediaTime();
++    [self updateOutput];
++    [self updateAppearance];
++    if (self.holdAssistEnabled && !wasLocked && self.action == kChimpPadActionA &&
++        sGameplayActive.load()) {
++        NSUInteger generation = self.releaseGeneration;
++        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.65 * NSEC_PER_SEC)),
++                       dispatch_get_main_queue(), ^{
++                           if (self.releaseGeneration != generation || !self.inputPressed ||
++                               !self.holdAssistEnabled || !sGameplayActive.load()) {
++                               return;
++                           }
++                           self.holdLocked = YES;
++                           [self updateOutput];
++                           [self updateAppearance];
++                           UIImpactFeedbackGenerator *fb =
++                               [[UIImpactFeedbackGenerator alloc]
++                                   initWithStyle:UIImpactFeedbackStyleMedium];
++                           [fb impactOccurred];
++                           ChimpPad_Log("A hold assist locked");
++                       });
++    }
++}
++
++- (void)inputUp {
++    if (!self.inputPressed) {
++        return;
++    }
++    self.inputPressed = NO;
++    [self updateOutput];
++    [self updateAppearance];
++}
++
++- (void)updateOutput {
++    BOOL shouldPress = self.inputPressed || self.holdLocked;
++    if (self.outputPressed == shouldPress) {
++        return;
++    }
++    self.outputPressed = shouldPress;
++    ChimpPad_SetAction(self.action, shouldPress);
++}
++
++- (void)updateAppearance {
++    BOOL active = self.inputPressed || self.holdLocked;
++    self.backgroundColor = active ? self.pressedColor : self.idleColor;
++    if (self.holdLocked) {
++        [self setTitle:@"A •" forState:UIControlStateNormal];
++        self.layer.borderColor =
++            [UIColor colorWithRed:0.42 green:0.88 blue:1.0 alpha:0.95].CGColor;
++        self.layer.borderWidth = 3.0;
++    } else {
++        [self setTitle:self.normalLabel forState:UIControlStateNormal];
++        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.58].CGColor;
++        self.layer.borderWidth = 2.0;
++    }
++}
++
++- (void)applyIdleColor:(UIColor *)idle pressedColor:(UIColor *)pressed {
++    self.idleColor = idle;
++    self.pressedColor = pressed;
++    self.backgroundColor = idle;
++}
++
++- (void)cancelInput {
++    self.releaseGeneration += 1;
++    self.inputPressed = NO;
++    self.holdLocked = NO;
++    [self updateOutput];
++    [self updateAppearance];
++}
++@end
++
++@interface ChimpPadTouchStick : UIView
++@property(nonatomic, strong) UIView *knob;
++- (void)cancelInput;
++@end
++
++@implementation ChimpPadTouchStick
++- (instancetype)initWithFrame:(CGRect)frame {
++    self = [super initWithFrame:frame];
++    if (self) {
++        self.multipleTouchEnabled = NO;
++        self.backgroundColor = [UIColor colorWithWhite:0.04 alpha:0.30];
++        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.42].CGColor;
++        self.layer.borderWidth = 2.0;
++        self.accessibilityLabel = @"Steering";
++        self.knob = [[UIView alloc] initWithFrame:CGRectZero];
++        self.knob.userInteractionEnabled = NO;
++        self.knob.backgroundColor =
++            [UIColor colorWithRed:0.34 green:0.62 blue:0.82 alpha:0.68];
++        self.knob.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.62].CGColor;
++        self.knob.layer.borderWidth = 2.0;
++        [self addSubview:self.knob];
++    }
++    return self;
++}
++
++- (void)layoutSubviews {
++    [super layoutSubviews];
++    CGFloat size = MIN(CGRectGetWidth(self.bounds), CGRectGetHeight(self.bounds));
++    self.layer.cornerRadius = size * 0.5;
++    CGFloat knobSize = size * 0.43;
++    self.knob.bounds = CGRectMake(0, 0, knobSize, knobSize);
++    self.knob.layer.cornerRadius = knobSize * 0.5;
++    if (!sTouchStickActive.load()) {
++        self.knob.center =
++            CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
++    }
++}
++
++- (void)updateForPoint:(CGPoint)point {
++    CGPoint center = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
++    CGFloat size = MIN(CGRectGetWidth(self.bounds), CGRectGetHeight(self.bounds));
++    CGFloat radius = size * 0.34;
++    CGFloat dx = point.x - center.x;
++    CGFloat dy = point.y - center.y;
++    CGFloat distance = hypot(dx, dy);
++    if (distance > radius && distance > 0.0) {
++        dx = dx / distance * radius;
++        dy = dy / distance * radius;
++    }
++    self.knob.center = CGPointMake(center.x + dx, center.y + dy);
++    ChimpPadStickState st = ChimpPad_StickFromTouch(dx, dy, (float)radius);
++    Sint16 x = (Sint16)lround(st.x * SDL_JOYSTICK_AXIS_MAX);
++    /* ChimpPad_StickFromTouch already uses +up N64; SDL left-stick +y is down. */
++    Sint16 y = (Sint16)lround(-st.y * SDL_JOYSTICK_AXIS_MAX);
++    ChimpPad_SetStickAxes(x, y);
++}
++
++- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
++    UITouch *touch = touches.anyObject;
++    if (!touch) {
++        return;
++    }
++    sTouchStickActive.store(true);
++    [self updateForPoint:[touch locationInView:self]];
++}
++
++- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
++    UITouch *touch = touches.anyObject;
++    if (touch) {
++        [self updateForPoint:[touch locationInView:self]];
++    }
++}
++
++- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
++    [self cancelInput];
++}
++- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
++    [self cancelInput];
++}
++
++- (void)cancelInput {
++    ChimpPad_SetStickAxes(0, 0);
++    sTouchStickActive.store(false);
++    self.knob.center =
++        CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
++}
++@end
++
++static CGRect CP_Frame(CGPoint center, CGFloat w, CGFloat h) {
++    return CGRectMake(center.x - w * 0.5, center.y - h * 0.5, w, h);
++}
++
++@interface ChimpPadTouchOverlay : UIView
++@property(nonatomic, strong) ChimpPadTouchStick *stick;
++@property(nonatomic, strong) NSArray<ChimpPadTouchButton *> *buttons;
++@property(nonatomic, strong) ChimpPadTouchButton *buttonA;
++@property(nonatomic, strong) ChimpPadTouchButton *buttonB;
++@property(nonatomic, strong) ChimpPadTouchButton *buttonL;
++@property(nonatomic, strong) ChimpPadTouchButton *buttonZ;
++@property(nonatomic, strong) ChimpPadTouchButton *buttonR;
++@property(nonatomic, strong) ChimpPadTouchButton *buttonStart;
++@property(nonatomic, strong) ChimpPadTouchButton *cUp;
++@property(nonatomic, strong) ChimpPadTouchButton *cDown;
++@property(nonatomic, strong) ChimpPadTouchButton *cLeft;
++@property(nonatomic, strong) ChimpPadTouchButton *cRight;
++@property(nonatomic, strong) ChimpPadTouchButton *menuButton;
++- (void)cancelAllInputs;
++@end
++
++@implementation ChimpPadTouchOverlay
++- (instancetype)initWithFrame:(CGRect)frame {
++    self = [super initWithFrame:frame];
++    if (self) {
++        self.backgroundColor = UIColor.clearColor;
++        self.multipleTouchEnabled = YES;
++        self.stick = [[ChimpPadTouchStick alloc] initWithFrame:CGRectZero];
++        self.buttonA = [[ChimpPadTouchButton alloc] initWithLabel:@"A"
++                                                           action:kChimpPadActionA];
++        self.buttonA.holdAssistEnabled = YES;
++        self.buttonB = [[ChimpPadTouchButton alloc] initWithLabel:@"B"
++                                                           action:kChimpPadActionB];
++        self.buttonL = [[ChimpPadTouchButton alloc] initWithLabel:@"L"
++                                                           action:kChimpPadActionL];
++        self.buttonZ = [[ChimpPadTouchButton alloc] initWithLabel:@"Z"
++                                                           action:kChimpPadActionZ];
++        self.buttonR = [[ChimpPadTouchButton alloc] initWithLabel:@"R"
++                                                           action:kChimpPadActionR];
++        self.buttonStart = [[ChimpPadTouchButton alloc] initWithLabel:@"▶"
++                                                               action:kChimpPadActionStart];
++        self.cUp = [[ChimpPadTouchButton alloc] initWithLabel:@"▲"
++                                                       action:kChimpPadActionCUp];
++        self.cDown = [[ChimpPadTouchButton alloc] initWithLabel:@"▼"
++                                                         action:kChimpPadActionCDown];
++        self.cLeft = [[ChimpPadTouchButton alloc] initWithLabel:@"◀"
++                                                         action:kChimpPadActionCLeft];
++        self.cRight = [[ChimpPadTouchButton alloc] initWithLabel:@"▶"
++                                                          action:kChimpPadActionCRight];
++        self.menuButton = [[ChimpPadTouchButton alloc] initWithLabel:@"•••"
++                                                              action:kChimpPadActionMenu];
++
++        [self.buttonA
++            applyIdleColor:[UIColor colorWithRed:0.08 green:0.35 blue:0.88 alpha:0.58]
++              pressedColor:[UIColor colorWithRed:0.14 green:0.48 blue:1.00 alpha:0.88]];
++        [self.buttonB
++            applyIdleColor:[UIColor colorWithRed:0.05 green:0.55 blue:0.24 alpha:0.58]
++              pressedColor:[UIColor colorWithRed:0.10 green:0.76 blue:0.34 alpha:0.88]];
++        [self.buttonStart
++            applyIdleColor:[UIColor colorWithRed:0.68 green:0.12 blue:0.16 alpha:0.52]
++              pressedColor:[UIColor colorWithRed:0.94 green:0.22 blue:0.26 alpha:0.88]];
++        UIColor *cIdle = [UIColor colorWithRed:0.95 green:0.67 blue:0.12 alpha:0.48];
++        UIColor *cPressed = [UIColor colorWithRed:1.00 green:0.78 blue:0.20 alpha:0.86];
++        for (ChimpPadTouchButton *b in @[ self.cUp, self.cDown, self.cLeft, self.cRight ]) {
++            b.idleColor = cIdle;
++            b.pressedColor = cPressed;
++            b.backgroundColor = cIdle;
++        }
++
++        self.buttons = @[
++            self.buttonA, self.buttonB, self.buttonL, self.buttonZ, self.buttonR,
++            self.buttonStart, self.cUp, self.cDown, self.cLeft, self.cRight,
++            self.menuButton
++        ];
++        [self addSubview:self.stick];
++        for (ChimpPadTouchButton *b in self.buttons) {
++            [self addSubview:b];
++        }
++    }
++    return self;
++}
++
++/* Silence missing applyIdleColor if category not on base — implement here. */
++- (void)doesNotRecognizeSelector:(SEL)aSelector {
++    [super doesNotRecognizeSelector:aSelector];
++}
++
++- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
++    UIView *hit = [super hitTest:point withEvent:event];
++    return hit == self ? nil : hit;
++}
++
++- (void)layoutSubviews {
++    [super layoutSubviews];
++    UIEdgeInsets safe = self.safeAreaInsets;
++    CGFloat width = CGRectGetWidth(self.bounds);
++    CGFloat height = CGRectGetHeight(self.bounds);
++    ChimpPadLayoutKind kind = ChimpPad_LayoutKindForSize((float)width, (float)height);
++    BOOL phone = (kind == kChimpPadLayoutPhone);
++
++    CGFloat left = safe.left + (phone ? 10.0 : 24.0);
++    CGFloat right = safe.right + (phone ? 10.0 : 24.0);
++    CGFloat bottom = safe.bottom + (phone ? 10.0 : 20.0);
++    CGFloat top = safe.top + 8.0;
++
++    CGFloat stickSize = phone ? 124.0 : 150.0;
++    CGPoint stickCenter =
++        CGPointMake(left + stickSize * 0.55, height - bottom - stickSize * 0.55);
++    self.stick.frame = CP_Frame(stickCenter, stickSize, stickSize);
++
++    CGFloat shoulder = phone ? 48.0 : 54.0;
++    self.buttonZ.frame =
++        CP_Frame(CGPointMake(stickCenter.x + 8.0,
++                             CGRectGetMinY(self.stick.frame) - 8.0 - shoulder * 0.5),
++                 shoulder, shoulder);
++    self.buttonL.frame =
++        CP_Frame(CGPointMake(stickCenter.x - shoulder - 4.0,
++                             CGRectGetMidY(self.buttonZ.frame)),
++                 shoulder, shoulder);
++
++    CGFloat aSize = phone ? 78.0 : 90.0;
++    CGFloat bSize = phone ? 64.0 : 72.0;
++    CGFloat rSize = phone ? 56.0 : 64.0;
++    CGPoint aCenter =
++        CGPointMake(width - right - aSize * 0.55, height - bottom - aSize * 0.55);
++    self.buttonA.frame = CP_Frame(aCenter, aSize, aSize);
++    self.buttonB.frame =
++        CP_Frame(CGPointMake(aCenter.x - bSize - 12.0, aCenter.y + 8.0), bSize, bSize);
++    self.buttonR.frame =
++        CP_Frame(CGPointMake(aCenter.x + 4.0, aCenter.y - aSize * 0.85), rSize, rSize);
++
++    CGFloat cSize = phone ? 40.0 : 46.0;
++    CGPoint cCenter = CGPointMake(aCenter.x - 10.0, top + cSize * 2.2 + 20.0);
++    self.cUp.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y - cSize), cSize, cSize);
++    self.cDown.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y + cSize), cSize, cSize);
++    self.cLeft.frame = CP_Frame(CGPointMake(cCenter.x - cSize, cCenter.y), cSize, cSize);
++    self.cRight.frame = CP_Frame(CGPointMake(cCenter.x + cSize, cCenter.y), cSize, cSize);
++
++    CGFloat startW = phone ? 52.0 : 58.0;
++    self.menuButton.frame =
++        CGRectMake(width - right - startW, top, startW, 28.0);
++    self.buttonStart.frame =
++        CGRectMake(width - right - startW, top + 32.0, startW, 36.0);
++
++    ChimpPad_Log("layout kind=%s size=%.0fx%.0f safe L%.0f R%.0f T%.0f B%.0f",
++                 phone ? "phone" : "tablet", width, height, safe.left, safe.right,
++                 safe.top, safe.bottom);
++}
++
++- (void)cancelAllInputs {
++    [self.stick cancelInput];
++    for (ChimpPadTouchButton *b in self.buttons) {
++        [b cancelInput];
++    }
++}
++@end
++
++
++
++static ChimpPadTouchOverlay *sOverlay;
++
++static void ChimpPad_ApplyTouchControlsState(void) {
++    if (sOverlay == nil) {
++        return;
++    }
++    BOOL show = sTouchControlsDesired && !sMenuVisible.load();
++    sOverlay.hidden = !show;
++    if (!show) {
++        [sOverlay cancelAllInputs];
++        ChimpPad_ResetAllInputs();
++    }
++}
++
++static void ChimpPad_InstallOverlay(void) {
++    if (sOverlay != nil || sSDLWindow == nil) {
++        return;
++    }
++    sOverlay = [[ChimpPadTouchOverlay alloc] initWithFrame:sSDLWindow.bounds];
++    sOverlay.autoresizingMask =
++        UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
++    [sSDLWindow addSubview:sOverlay];
++    ChimpPad_AttachVirtualController();
++    ChimpPad_ApplyTouchControlsState();
++    ChimpPad_Log("touch overlay installed");
++}
++
++void ChimpPad_OnWindowCreated(struct SDL_Window *window) {
++    if (window == nullptr) {
++        return;
++    }
++    SDL_SysWMinfo info;
++    SDL_VERSION(&info.version);
++    if (!SDL_GetWindowWMInfo(window, &info)) {
++        ChimpPad_Log("SDL_GetWindowWMInfo failed: %s", SDL_GetError());
++        return;
++    }
++#if defined(SDL_VIDEO_DRIVER_UIKIT)
++    sSDLWindow = info.info.uikit.window;
++#endif
++    if (sSDLWindow == nil) {
++        ChimpPad_Log("no UIKit window yet");
++        return;
++    }
++    dispatch_async(dispatch_get_main_queue(), ^{
++        ChimpPad_InstallOverlay();
++    });
++}
++
++int ChimpPad_TouchControlsAvailable(void) {
++#if TARGET_OS_IOS
++    return 1;
++#else
++    return 0;
++#endif
++}
++
++void ChimpPad_InitializeTouchControls(void) {
++    sTouchControlsDesired = YES;
++    ChimpPad_Log("initialize touch controls");
++    if (sSDLWindow != nil) {
++        ChimpPad_InstallOverlay();
++    }
++}
++
++void ChimpPad_SetTouchControlsEnabled(int enabled) {
++    sTouchControlsDesired = enabled ? YES : NO;
++    ChimpPad_ApplyTouchControlsState();
++}
++
++void ChimpPad_SetGameplayActive(int active) {
++    sGameplayActive.store(active != 0);
++    if (!active && sOverlay != nil) {
++        [sOverlay cancelAllInputs];
++    }
++}
++
++void ChimpPad_SetMenuVisible(int visible) {
++    sMenuVisible.store(visible != 0);
++    ChimpPad_ApplyTouchControlsState();
++}
++
++float ChimpPad_RecommendedMenuScale(void) {
++    if (sSDLWindow == nil) {
++        return 1.0f;
++    }
++    CGFloat shortSide =
++        MIN(CGRectGetWidth(sSDLWindow.bounds), CGRectGetHeight(sSDLWindow.bounds));
++    if (shortSide >= 600.0) {
++        return 1.15f;
++    }
++    return 1.0f;
++}
+diff --git a/platform/chimppad/ChimpPadTouchControls.h b/platform/chimppad/ChimpPadTouchControls.h
+new file mode 100644
+index 0000000..2903f9b
+--- /dev/null
++++ b/platform/chimppad/ChimpPadTouchControls.h
+@@ -0,0 +1,22 @@
++#pragma once
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++struct SDL_Window;
++
++void ChimpPad_OnWindowCreated(struct SDL_Window *window);
++int ChimpPad_TouchControlsAvailable(void);
++void ChimpPad_InitializeTouchControls(void);
++void ChimpPad_SetTouchControlsEnabled(int enabled);
++void ChimpPad_SetGameplayActive(int active);
++void ChimpPad_SetMenuVisible(int visible);
++float ChimpPad_RecommendedMenuScale(void);
++
++/* Runtime logging helper used by shell and tests. */
++void ChimpPad_Log(const char *fmt, ...);
++
++#ifdef __cplusplus
++}
++#endif
+diff --git a/platform/chimppad_ios_main.c b/platform/chimppad_ios_main.c
+new file mode 100644
+index 0000000..7d8be6c
+--- /dev/null
++++ b/platform/chimppad_ios_main.c
+@@ -0,0 +1,15 @@
++/* ChimpPad iOS entry via SDL's UIKit application lifecycle. */
++#include <SDL.h>
++#include <SDL_main.h>
++
++/* Avoid redefining main when we include SDL_main.h */
++#ifdef main
++#undef main
++#endif
++
++/* main_app.cpp provides SDL_main under MDKR_APP. */
++extern int SDL_main(int argc, char *argv[]);
++
++int main(int argc, char *argv[]) {
++    return SDL_UIKitRunApp(argc, argv, SDL_main);
++}
+diff --git a/platform/fast3d/gfx_opengl.c b/platform/fast3d/gfx_opengl.c
+index e7f056e..32703bc 100644
+--- a/platform/fast3d/gfx_opengl.c
++++ b/platform/fast3d/gfx_opengl.c
+@@ -23,8 +23,17 @@
+ #ifdef MGB64_PORTMASTER_GLES
+ #include <GLES3/gl32.h>
+ #elif defined(__APPLE__)
++#include <TargetConditionals.h>
++#if TARGET_OS_IOS
++#ifndef GLES_SILENCE_DEPRECATION
++#define GLES_SILENCE_DEPRECATION 1
++#endif
++#include <OpenGLES/ES3/gl.h>
++#include <OpenGLES/ES3/glext.h>
++#else
+ #define GL_SILENCE_DEPRECATION
+ #include <OpenGL/gl3.h>
++#endif
+ #else
+ #include <glad/glad.h>
+ #endif
+diff --git a/platform/gfx_opengl_ios_stub.c b/platform/gfx_opengl_ios_stub.c
+new file mode 100644
+index 0000000..387bfab
+--- /dev/null
++++ b/platform/gfx_opengl_ios_stub.c
+@@ -0,0 +1,24 @@
++/* ChimpPad iOS: WebGPU-only. Stub desktop OpenGL backend entry points. */
++#include <stddef.h>
++#include <stdint.h>
++#include <stdio.h>
++
++struct GfxRenderingAPI;
++
++static int stub_unused(void) { return 0; }
++
++struct GfxRenderingAPI *gfx_opengl_api(void) {
++    fprintf(stderr, "[ChimpPad] gfx_opengl_api unavailable on iOS (WebGPU only)\n");
++    return NULL;
++}
++
++void gfx_opengl_copy_captured_frame(void *dst, int w, int h) {
++    (void)dst; (void)w; (void)h;
++}
++
++int gfx_opengl_max_offscreen_dim(void) {
++    return 4096;
++}
++
++/* Some TUs may reference these weakly. */
++int gfx_opengl_zbuf_clear(void) { return stub_unused(); }
+diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
+index 30ca61e..63eee8a 100644
+--- a/platform/platform_sdl_min.c
++++ b/platform/platform_sdl_min.c
+@@ -31,7 +31,22 @@
+ #include <limits.h>
+ #include <time.h>
+ #ifndef __EMSCRIPTEN__
++#if defined(__APPLE__)
++#include <TargetConditionals.h>
++#endif
++#if defined(__APPLE__) && TARGET_OS_IOS
++#ifndef GLES_SILENCE_DEPRECATION
++#define GLES_SILENCE_DEPRECATION 1
++#endif
++#include <OpenGLES/ES3/gl.h>
++#include <OpenGLES/ES3/glext.h>
++/* iOS uses system GLES symbols; no glad. */
++static int chimppad_ios_glad_stub(void) { return 1; }
++#define gladLoadGLLoader(x) chimppad_ios_glad_stub()
++typedef void *(*GLADloadproc)(const char *);
++#else
+ #include <glad/glad.h>          /* GL loader — desktop only; web is WebGPU-only */
++#endif
+ #include <SDL_syswm.h>
+ #else
+ #include <emscripten/emscripten.h>
+@@ -679,8 +694,12 @@ static void sdl_gl_backpressure_after_swap(void) {
+         return; /* FIFO swap itself is the queue bound. */
+     }
+ 
++#if defined(__APPLE__) && TARGET_OS_IOS
++    if (1) { /* system GLES symbols are non-null; use glFinish path for simplicity */
++#else
+     if (glFenceSync == NULL || glClientWaitSync == NULL ||
+         glDeleteSync == NULL) {
++#endif
+         /* A 3.3 core context should always expose sync objects. glFinish is a
+          * conservative bounded fallback instead of silently allowing queue
+          * growth on an unusual loader/driver. */

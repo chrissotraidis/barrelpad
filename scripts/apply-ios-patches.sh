@@ -7,19 +7,17 @@ if [ ! -f "$SRC/CMakeLists.txt" ]; then
   echo "missing $SRC — run scripts/clone-refs.sh first" >&2
   exit 1
 fi
-if [ -f "$ROOT/patches/goldenballoon-ios-webgpu.patch" ]; then
-  # Best-effort; full tree may already be patched
-  (cd "$SRC" && patch -p1 --forward --dry-run < "$ROOT/patches/goldenballoon-ios-webgpu.patch" >/dev/null 2>&1) && \
-    (cd "$SRC" && patch -p1 --forward < "$ROOT/patches/goldenballoon-ios-webgpu.patch") || \
-    echo "[ChimpPad] webgpu patch already applied or drifted — continuing"
+FULL="$ROOT/patches/goldenballoon-ios-full.patch"
+if [ -f "$FULL" ]; then
+  if (cd "$SRC" && patch -p1 --forward --dry-run < "$FULL" >/dev/null 2>&1); then
+    (cd "$SRC" && patch -p1 --forward < "$FULL")
+    echo "[ChimpPad] applied goldenballoon-ios-full.patch"
+  else
+    echo "[ChimpPad] full patch already applied or not clean; syncing touch sources only"
+  fi
 fi
 mkdir -p "$SRC/platform/chimppad"
 cp -f "$ROOT/ios/ChimpPadShell.mm" "$ROOT/ios/ChimpPadTouchControls.h" \
   "$ROOT/src/ChimpPadInput.c" "$ROOT/src/ChimpPadInput.h" \
   "$SRC/platform/chimppad/"
-# Stub/main helpers if present in sources from prior build
-for f in gfx_opengl_ios_stub.c chimppad_ios_main.c; do
-  if [ -f "$SRC/platform/$f" ]; then :; fi
-done
-echo "[ChimpPad] iOS chimppad sources synced into $SRC/platform/chimppad"
-echo "[ChimpPad] If configure fails, use the existing sources/goldenballoon tree that was last known-good."
+echo "[ChimpPad] chimppad touch sources synced into $SRC/platform/chimppad"
