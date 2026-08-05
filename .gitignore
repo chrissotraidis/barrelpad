@@ -1,0 +1,79 @@
+# macOS
+.DS_Store
+*.swp
+*~
+
+# ROM and copyrighted game data — never commit
+*.v64
+*.z64
+*.n64
+*.n64.gz
+baseroms/
+assets/
+extracted/
+*.o2r
+ref/*.v64
+ref/*.z64
+ref/*.n64
+
+# Large third-party checkouts under ref/ (re-clone via scripts/clone-refs.sh)
+ref/diddy-kong-racing/
+ref/goldenballoon/
+# SpaghettiPad reference may be present; ignore nested build artifacts only
+ref/spaghettipad/build*/
+ref/spaghettipad/sources/
+
+# Disposable build clones
+sources/
+
+# Build trees
+build/
+build-*/
+build-macos/
+build-ios/
+build-sim/
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+xcuserdata/
+
+# Golden Balloon / host local state
+mdkr64.ini
+*.sav
+*.eep
+*.mpk
+*.sra
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# Local secrets / signing
+*.p12
+*.mobileprovision
+*.cer
+Secrets.xcconfig
+local.xcconfig
+
+# Logs and agent scratch (keep project docs/evidence intentional)
+*.log
+!docs/evidence/**
+
+# CMake / Ninja
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+compile_commands.json
+
+# App bundles produced locally
+*.app/
+*.ipa
+*.dmg
+dist/
