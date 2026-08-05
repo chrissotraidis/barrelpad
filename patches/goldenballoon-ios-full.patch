@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 814753b..540fb09 100644
+index 814753b..5ccba35 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
@@ -48,7 +48,7 @@ index 814753b..540fb09 100644
      set(GLAD_SOURCES ${CMAKE_SOURCE_DIR}/lib/glad/src/glad.c)
  else()
      set(GLAD_SOURCES "")
-@@ -1115,7 +1125,18 @@ if(NOT EMSCRIPTEN)
+@@ -1115,7 +1125,19 @@ if(NOT EMSCRIPTEN)
          endif()
          target_link_libraries(${MDKR_TARGET} PRIVATE m)
      endif()
@@ -64,11 +64,12 @@ index 814753b..540fb09 100644
 +            SDL2main)
 +        # iOS needs SDL_main entry; do not use SDL_MAIN_HANDLED for the final binary.
 +        target_compile_definitions(${MDKR_TARGET} PRIVATE CHIMPPAD_IOS=1)
++        target_include_directories(${MDKR_TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/platform/chimppad)
 +    elseif(APPLE)
          target_link_libraries(${MDKR_TARGET} PRIVATE ${OPENGL_LIB})
      else()
          target_link_libraries(${MDKR_TARGET} PRIVATE OpenGL::GL ${CMAKE_DL_LIBS})
-@@ -1181,11 +1202,17 @@ if(NOT EMSCRIPTEN)
+@@ -1181,11 +1203,17 @@ if(NOT EMSCRIPTEN)
          # Native "open file" panel, one implementation per platform. A
          # user-selected file is permission-exempt, which is why this replaced
          # the directory scan that used to trip macOS TCC.
@@ -87,7 +88,7 @@ index 814753b..540fb09 100644
          elseif(WIN32)
              list(APPEND APP_SOURCES ${CMAKE_SOURCE_DIR}/platform/app/file_dialog_win.cpp)
          else()
-@@ -1197,6 +1224,15 @@ if(NOT EMSCRIPTEN)
+@@ -1197,6 +1225,15 @@ if(NOT EMSCRIPTEN)
          endif()
  
          add_library(mdkr64_app STATIC ${IMGUI_SOURCES} ${APP_SOURCES})
@@ -103,7 +104,7 @@ index 814753b..540fb09 100644
          target_compile_features(mdkr64_app PRIVATE cxx_std_17)
          # Keep warnings strict on the launcher code we own without inheriting
          # that policy into vendored Dear ImGui.  The engine's maintained C
-@@ -1243,7 +1279,11 @@ if(NOT EMSCRIPTEN)
+@@ -1243,7 +1280,11 @@ if(NOT EMSCRIPTEN)
              target_link_libraries(mdkr64_app PUBLIC ${SDL2_LIBRARIES})
          endif()
          target_link_libraries(mdkr64_app PRIVATE Threads::Threads)
@@ -202,7 +203,7 @@ index b6abdcf..70d8bf6 100644
  #else
  inline void AppActivation_requestForeground(SDL_Window *window, void *nativeView = nullptr) {
 diff --git a/platform/app/app_host.cpp b/platform/app/app_host.cpp
-index 055d0d2..f97d943 100644
+index 055d0d2..4985cb1 100644
 --- a/platform/app/app_host.cpp
 +++ b/platform/app/app_host.cpp
 @@ -1,5 +1,11 @@
@@ -263,6 +264,63 @@ index 055d0d2..f97d943 100644
      if (!ImGui_ImplSDL2_InitForOpenGL(window_, gl_)) {
          std::fprintf(stderr, "[app] ImGui_ImplSDL2_InitForOpenGL failed\n");
          return false;
+@@ -278,6 +306,12 @@ bool AppHost::initWebGpu(const char *title, int width, int height) {
+         return false;
+     }
+     std::fprintf(stderr, "[app] host: WebGPU (%dx%d drawable, format=%d)\n", dw, dh, fmt);
++#if defined(__APPLE__) && TARGET_OS_IOS
++    ChimpPad_OnWindowCreated(window_);
++    ChimpPad_InitializeTouchControls();
++    ChimpPad_SetGameplayActive(1);
++    std::fprintf(stderr, "[ChimpPad] touch controls initialized (WebGPU path)\n");
++#endif
+     return true;
+ }
+ 
+diff --git a/platform/app/arg_triage.cpp b/platform/app/arg_triage.cpp
+index fbc11ac..cfdb5cc 100644
+--- a/platform/app/arg_triage.cpp
++++ b/platform/app/arg_triage.cpp
+@@ -3,6 +3,10 @@
+ 
+ #include <cstring>
+ 
++#if defined(__APPLE__)
++#include <TargetConditionals.h>
++#endif
++
+ int mdkr_argv_requests_ui(int argc, char **argv) {
+     if (argv == nullptr) return 0;
+     for (int i = 1; i < argc; ++i) {
+@@ -11,11 +15,28 @@ int mdkr_argv_requests_ui(int argc, char **argv) {
+     return 0;
+ }
+ 
++static int mdkr_argv_requests_headless(int argc, char **argv) {
++    if (argv == nullptr) return 0;
++    for (int i = 1; i < argc; ++i) {
++        if (argv[i] == nullptr) continue;
++        if (std::strcmp(argv[i], "--headless-frames") == 0) return 1;
++        if (std::strcmp(argv[i], "--headless-ticks") == 0) return 1;
++        if (std::strcmp(argv[i], "--dump-frames") == 0) return 1;
++    }
++    return 0;
++}
++
+ int mdkr_is_automation_invocation(int argc, char **argv) {
+     // Explicit opt-in always wins: `mdkr64 --ui` opens the shell even though it
+     // has arguments. Nothing else in the harness passes --ui.
+     if (mdkr_argv_requests_ui(argc, argv)) return 0;
+ 
++#if defined(__APPLE__) && TARGET_OS_IOS
++    /* ChimpPad: interactive UI + touch overlay are required on iOS. Only
++     * explicit headless automation flags skip the shell. */
++    if (!mdkr_argv_requests_headless(argc, argv)) return 0;
++#endif
++
+     // Deny by default: any argument at all means "the caller already told the
+     // engine what to do". Only a bare invocation (the .app double-click, or a
+     // user typing `mdkr64`) opens the launcher.
 diff --git a/platform/chimppad/ChimpPadInput.c b/platform/chimppad/ChimpPadInput.c
 new file mode 100644
 index 0000000..4d3bfdb
@@ -735,10 +793,10 @@ index 0000000..65ddea8
 +#endif
 diff --git a/platform/chimppad/ChimpPadShell.mm b/platform/chimppad/ChimpPadShell.mm
 new file mode 100644
-index 0000000..82365e8
+index 0000000..c727b7e
 --- /dev/null
 +++ b/platform/chimppad/ChimpPadShell.mm
-@@ -0,0 +1,683 @@
+@@ -0,0 +1,719 @@
 +/*
 + * ChimpPad iOS/iPadOS shell: touch overlay + virtual controller emission.
 + * Patterns adapted from SpaghettiPad; mappings tuned for Diddy Kong Racing
@@ -974,10 +1032,10 @@ index 0000000..82365e8
 +        self.action = action;
 +        self.normalLabel = label;
 +        self.multipleTouchEnabled = YES;
-+        self.idleColor = [UIColor colorWithWhite:0.04 alpha:0.38];
-+        self.pressedColor = [UIColor colorWithWhite:0.72 alpha:0.48];
++        self.idleColor = [UIColor colorWithWhite:0.08 alpha:0.62];
++        self.pressedColor = [UIColor colorWithWhite:0.85 alpha:0.78];
 +        self.backgroundColor = self.idleColor;
-+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.58].CGColor;
++        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.78].CGColor;
 +        self.layer.borderWidth = 2.0;
 +        [self setTitle:label forState:UIControlStateNormal];
 +        [self setTitleColor:[UIColor colorWithWhite:1.0 alpha:0.92]
@@ -1062,7 +1120,7 @@ index 0000000..82365e8
 +        self.layer.borderWidth = 3.0;
 +    } else {
 +        [self setTitle:self.normalLabel forState:UIControlStateNormal];
-+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.58].CGColor;
++        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.78].CGColor;
 +        self.layer.borderWidth = 2.0;
 +    }
 +}
@@ -1092,7 +1150,7 @@ index 0000000..82365e8
 +    self = [super initWithFrame:frame];
 +    if (self) {
 +        self.multipleTouchEnabled = NO;
-+        self.backgroundColor = [UIColor colorWithWhite:0.04 alpha:0.30];
++        self.backgroundColor = [UIColor colorWithWhite:0.10 alpha:0.55];
 +        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.42].CGColor;
 +        self.layer.borderWidth = 2.0;
 +        self.accessibilityLabel = @"Steering";
@@ -1223,7 +1281,7 @@ index 0000000..82365e8
 +                                                              action:kChimpPadActionMenu];
 +
 +        [self.buttonA
-+            applyIdleColor:[UIColor colorWithRed:0.08 green:0.35 blue:0.88 alpha:0.58]
++            applyIdleColor:[UIColor colorWithRed:0.08 green:0.35 blue:0.88 alpha:0.78]
 +              pressedColor:[UIColor colorWithRed:0.14 green:0.48 blue:1.00 alpha:0.88]];
 +        [self.buttonB
 +            applyIdleColor:[UIColor colorWithRed:0.05 green:0.55 blue:0.24 alpha:0.58]
@@ -1231,7 +1289,7 @@ index 0000000..82365e8
 +        [self.buttonStart
 +            applyIdleColor:[UIColor colorWithRed:0.68 green:0.12 blue:0.16 alpha:0.52]
 +              pressedColor:[UIColor colorWithRed:0.94 green:0.22 blue:0.26 alpha:0.88]];
-+        UIColor *cIdle = [UIColor colorWithRed:0.95 green:0.67 blue:0.12 alpha:0.48];
++        UIColor *cIdle = [UIColor colorWithRed:0.95 green:0.67 blue:0.12 alpha:0.72];
 +        UIColor *cPressed = [UIColor colorWithRed:1.00 green:0.78 blue:0.20 alpha:0.86];
 +        for (ChimpPadTouchButton *b in @[ self.cUp, self.cDown, self.cLeft, self.cRight ]) {
 +            b.idleColor = cIdle;
@@ -1351,6 +1409,10 @@ index 0000000..82365e8
 +    sOverlay.autoresizingMask =
 +        UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 +    [sSDLWindow addSubview:sOverlay];
++    sOverlay.userInteractionEnabled = YES;
++    sOverlay.opaque = NO;
++    sOverlay.alpha = 1.0;
++    [sSDLWindow bringSubviewToFront:sOverlay];
 +    ChimpPad_AttachVirtualController();
 +    ChimpPad_ApplyTouchControlsState();
 +    ChimpPad_Log("touch overlay installed");
@@ -1362,15 +1424,47 @@ index 0000000..82365e8
 +    }
 +    SDL_SysWMinfo info;
 +    SDL_VERSION(&info.version);
-+    if (!SDL_GetWindowWMInfo(window, &info)) {
-+        ChimpPad_Log("SDL_GetWindowWMInfo failed: %s", SDL_GetError());
-+        return;
-+    }
++    if (SDL_GetWindowWMInfo(window, &info)) {
 +#if defined(SDL_VIDEO_DRIVER_UIKIT)
-+    sSDLWindow = info.info.uikit.window;
++        sSDLWindow = info.info.uikit.window;
 +#endif
++    } else {
++        ChimpPad_Log("SDL_GetWindowWMInfo failed: %s", SDL_GetError());
++    }
 +    if (sSDLWindow == nil) {
-+        ChimpPad_Log("no UIKit window yet");
++        /* Fallback: key window / first app window (Metal path race). */
++        sSDLWindow = UIApplication.sharedApplication.keyWindow;
++        if (sSDLWindow == nil && UIApplication.sharedApplication.windows.count > 0) {
++            sSDLWindow = UIApplication.sharedApplication.windows.firstObject;
++        }
++        for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
++            if (![scene isKindOfClass:[UIWindowScene class]]) {
++                continue;
++            }
++            UIWindowScene *ws = (UIWindowScene *)scene;
++            for (UIWindow *w in ws.windows) {
++                if (w.isKeyWindow || sSDLWindow == nil) {
++                    sSDLWindow = w;
++                }
++            }
++        }
++        ChimpPad_Log("UIKit window fallback used=%d", sSDLWindow != nil ? 1 : 0);
++    }
++    if (sSDLWindow == nil) {
++        ChimpPad_Log("no UIKit window yet — retrying install shortly");
++        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
++                       dispatch_get_main_queue(), ^{
++            if (sSDLWindow == nil) {
++                sSDLWindow = UIApplication.sharedApplication.keyWindow;
++                for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
++                    if (![scene isKindOfClass:[UIWindowScene class]]) continue;
++                    for (UIWindow *w in ((UIWindowScene *)scene).windows) {
++                        sSDLWindow = w;
++                    }
++                }
++            }
++            ChimpPad_InstallOverlay();
++        });
 +        return;
 +    }
 +    dispatch_async(dispatch_get_main_queue(), ^{
@@ -1524,7 +1618,7 @@ index 0000000..387bfab
 +/* Some TUs may reference these weakly. */
 +int gfx_opengl_zbuf_clear(void) { return stub_unused(); }
 diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
-index 30ca61e..63eee8a 100644
+index 30ca61e..2a764ae 100644
 --- a/platform/platform_sdl_min.c
 +++ b/platform/platform_sdl_min.c
 @@ -31,7 +31,22 @@
@@ -1563,3 +1657,17 @@ index 30ca61e..63eee8a 100644
          /* A 3.3 core context should always expose sync objects. glFinish is a
           * conservative bounded fallback instead of silently allowing queue
           * growth on an unusual loader/driver. */
+@@ -953,6 +972,13 @@ int platform_sdl_init(void) {
+     }
+     g_sdlWindow = s_window;
+     printf("[SDL] Window created (Emscripten / WebGPU via #canvas)\n");
++
++#if defined(__APPLE__) && TARGET_OS_IOS
++    ChimpPad_OnWindowCreated(s_window);
++    ChimpPad_InitializeTouchControls();
++    ChimpPad_SetGameplayActive(1);
++    fprintf(stderr, "[ChimpPad] touch overlay requested after SDL window create\n");
++#endif
+     return 0;   /* device/surface bring-up happens in gfx_init -> wgpu_init */
+ #else /* !__EMSCRIPTEN__ */
+ 

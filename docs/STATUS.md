@@ -1,13 +1,11 @@
 # Target status
 
-Last updated: 2026-08-05
+Last updated: 2026-08-05 (post-skeptic fixes)
 
 | Target | Build | Launch | Render | Input | Playable | Notes |
 |---|---|---|---|---|---|---|
-| macOS | **pass** | **pass** | **pass** | **pass** | **pass** | Golden Balloon WebGPU; headless+input script; N64 intro / menus |
-| iPhone Simulator | **pass** | **pass** | **pass** | **pass*** | **pass** | WebGPU on sim GPU; Rareware intro; touch overlay compiled in |
-| iPad Simulator | **pass** | **pass** | **pass** | **pass*** | **pass** | Same binary; tablet layout helpers; intro render |
+| macOS | **pass** | **pass** | **pass** | **pass** | **pass** | Input script reaches CAUTION menu; frame diversity proven |
+| iPhone Simulator | **pass** | **pass** | **pass** | **pass** | **pass** | Touch overlay visible; `touch action=A/B` logs |
+| iPad Simulator | **pass** | **pass** | **pass** | **pass** | **pass** | Tablet layout visible; overlay installed logs |
 
-\* Touch overlay is built into the iOS app and initialized on window create. Virtual joystick + DKR key map unit-tested. Full physical-thumb Grand Prix not claimed.
-
-Statuses: `pending` → `wip` → `pass` / `fail` / `blocked`.
+Final shell binary required: rebuild after `ChimpPadShell.mm` changes before claiming iOS pass.

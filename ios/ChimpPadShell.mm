@@ -233,10 +233,10 @@ static void ChimpPad_ResetAllInputs(void) {
         self.action = action;
         self.normalLabel = label;
         self.multipleTouchEnabled = YES;
-        self.idleColor = [UIColor colorWithWhite:0.04 alpha:0.38];
-        self.pressedColor = [UIColor colorWithWhite:0.72 alpha:0.48];
+        self.idleColor = [UIColor colorWithWhite:0.08 alpha:0.62];
+        self.pressedColor = [UIColor colorWithWhite:0.85 alpha:0.78];
         self.backgroundColor = self.idleColor;
-        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.58].CGColor;
+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.78].CGColor;
         self.layer.borderWidth = 2.0;
         [self setTitle:label forState:UIControlStateNormal];
         [self setTitleColor:[UIColor colorWithWhite:1.0 alpha:0.92]
@@ -321,7 +321,7 @@ static void ChimpPad_ResetAllInputs(void) {
         self.layer.borderWidth = 3.0;
     } else {
         [self setTitle:self.normalLabel forState:UIControlStateNormal];
-        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.58].CGColor;
+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.78].CGColor;
         self.layer.borderWidth = 2.0;
     }
 }
@@ -351,7 +351,7 @@ static void ChimpPad_ResetAllInputs(void) {
     self = [super initWithFrame:frame];
     if (self) {
         self.multipleTouchEnabled = NO;
-        self.backgroundColor = [UIColor colorWithWhite:0.04 alpha:0.30];
+        self.backgroundColor = [UIColor colorWithWhite:0.10 alpha:0.55];
         self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.42].CGColor;
         self.layer.borderWidth = 2.0;
         self.accessibilityLabel = @"Steering";
@@ -482,7 +482,7 @@ static CGRect CP_Frame(CGPoint center, CGFloat w, CGFloat h) {
                                                               action:kChimpPadActionMenu];
 
         [self.buttonA
-            applyIdleColor:[UIColor colorWithRed:0.08 green:0.35 blue:0.88 alpha:0.58]
+            applyIdleColor:[UIColor colorWithRed:0.08 green:0.35 blue:0.88 alpha:0.78]
               pressedColor:[UIColor colorWithRed:0.14 green:0.48 blue:1.00 alpha:0.88]];
         [self.buttonB
             applyIdleColor:[UIColor colorWithRed:0.05 green:0.55 blue:0.24 alpha:0.58]
@@ -490,7 +490,7 @@ static CGRect CP_Frame(CGPoint center, CGFloat w, CGFloat h) {
         [self.buttonStart
             applyIdleColor:[UIColor colorWithRed:0.68 green:0.12 blue:0.16 alpha:0.52]
               pressedColor:[UIColor colorWithRed:0.94 green:0.22 blue:0.26 alpha:0.88]];
-        UIColor *cIdle = [UIColor colorWithRed:0.95 green:0.67 blue:0.12 alpha:0.48];
+        UIColor *cIdle = [UIColor colorWithRed:0.95 green:0.67 blue:0.12 alpha:0.72];
         UIColor *cPressed = [UIColor colorWithRed:1.00 green:0.78 blue:0.20 alpha:0.86];
         for (ChimpPadTouchButton *b in @[ self.cUp, self.cDown, self.cLeft, self.cRight ]) {
             b.idleColor = cIdle;
@@ -610,6 +610,10 @@ static void ChimpPad_InstallOverlay(void) {
     sOverlay.autoresizingMask =
         UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [sSDLWindow addSubview:sOverlay];
+    sOverlay.userInteractionEnabled = YES;
+    sOverlay.opaque = NO;
+    sOverlay.alpha = 1.0;
+    [sSDLWindow bringSubviewToFront:sOverlay];
     ChimpPad_AttachVirtualController();
     ChimpPad_ApplyTouchControlsState();
     ChimpPad_Log("touch overlay installed");
@@ -621,15 +625,47 @@ void ChimpPad_OnWindowCreated(struct SDL_Window *window) {
     }
     SDL_SysWMinfo info;
     SDL_VERSION(&info.version);
-    if (!SDL_GetWindowWMInfo(window, &info)) {
-        ChimpPad_Log("SDL_GetWindowWMInfo failed: %s", SDL_GetError());
-        return;
-    }
+    if (SDL_GetWindowWMInfo(window, &info)) {
 #if defined(SDL_VIDEO_DRIVER_UIKIT)
-    sSDLWindow = info.info.uikit.window;
+        sSDLWindow = info.info.uikit.window;
 #endif
+    } else {
+        ChimpPad_Log("SDL_GetWindowWMInfo failed: %s", SDL_GetError());
+    }
     if (sSDLWindow == nil) {
-        ChimpPad_Log("no UIKit window yet");
+        /* Fallback: key window / first app window (Metal path race). */
+        sSDLWindow = UIApplication.sharedApplication.keyWindow;
+        if (sSDLWindow == nil && UIApplication.sharedApplication.windows.count > 0) {
+            sSDLWindow = UIApplication.sharedApplication.windows.firstObject;
+        }
+        for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+            if (![scene isKindOfClass:[UIWindowScene class]]) {
+                continue;
+            }
+            UIWindowScene *ws = (UIWindowScene *)scene;
+            for (UIWindow *w in ws.windows) {
+                if (w.isKeyWindow || sSDLWindow == nil) {
+                    sSDLWindow = w;
+                }
+            }
+        }
+        ChimpPad_Log("UIKit window fallback used=%d", sSDLWindow != nil ? 1 : 0);
+    }
+    if (sSDLWindow == nil) {
+        ChimpPad_Log("no UIKit window yet — retrying install shortly");
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if (sSDLWindow == nil) {
+                sSDLWindow = UIApplication.sharedApplication.keyWindow;
+                for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+                    if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+                    for (UIWindow *w in ((UIWindowScene *)scene).windows) {
+                        sSDLWindow = w;
+                    }
+                }
+            }
+            ChimpPad_InstallOverlay();
+        });
         return;
     }
     dispatch_async(dispatch_get_main_queue(), ^{
