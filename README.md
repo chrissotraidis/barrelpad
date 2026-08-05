@@ -50,7 +50,7 @@ always provides a way back to the host shell menu.
       <img src="docs/screenshots/ipad-race-touch.jpg" alt="ChimpPad Time Trial race on iPad Simulator with tablet touch layout">
     </td>
     <td width="50%">
-      <img src="docs/screenshots/iphone-touch-overlay.jpg" alt="ChimpPad iPhone Simulator touch overlay chrome">
+      <img src="docs/screenshots/iphone-touch-overlay.png" alt="ChimpPad iPhone Simulator touch overlay chrome">
     </td>
   </tr>
   <tr>
