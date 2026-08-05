@@ -77,3 +77,9 @@ compile_commands.json
 *.ipa
 *.dmg
 dist/
+save/
+
+# Reference checkouts (scripts/clone-refs.sh); keep policy only
+ref/*
+!ref/README.md
+save/

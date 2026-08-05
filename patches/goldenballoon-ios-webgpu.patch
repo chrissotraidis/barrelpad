@@ -1,0 +1,39 @@
+--- a/cmake/webgpu_artifact.cmake
++++ b/cmake/webgpu_artifact.cmake
+@@ -39,6 +39,22 @@ function(mdkr_select_wgpu_artifact os cpu abi out_supported out_asset out_sha ou
+         else()
+             set(_supported FALSE)
+         endif()
++    elseif(os STREQUAL "iOS" AND _abi STREQUAL "apple")
++        # ChimpPad: iOS Simulator prebuilts from wgpu-native v29.0.1.1
++        if(DEFINED MDKR_IOS_SIMULATOR AND MDKR_IOS_SIMULATOR)
++            if(_cpu MATCHES "^(arm64|aarch64)$")
++                set(_asset "wgpu-ios-aarch64-simulator-release.zip")
++                set(_sha "750e706765bef3744313745194774d095c916fc21d2a0e7d4d7b0bc4d0c92789")
++            else()
++                set(_supported FALSE)
++            endif()
++        else()
++            if(_cpu MATCHES "^(arm64|aarch64)$")
++                set(_asset "wgpu-ios-aarch64-release.zip")
++                set(_sha "0000000000000000000000000000000000000000000000000000000000000000")
++                set(_supported FALSE)
++            else()
++                set(_supported FALSE)
++            endif()
++        endif()
+     elseif(os STREQUAL "Linux" AND _abi STREQUAL "gnu")
+         if(_cpu MATCHES "^(arm64|aarch64)$")
+             set(_asset "wgpu-linux-aarch64-release.zip")
+--- a/cmake/webgpu.cmake
++++ b/cmake/webgpu.cmake
+@@ -37,6 +37,10 @@ set(_wgpu_base "https://github.com/gfx-rs/wgpu-native/releases/download/${WGPU_N
+ include("${CMAKE_CURRENT_LIST_DIR}/webgpu_artifact.cmake")
+ if(APPLE)
+     set(_wgpu_os Darwin)
++    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++        set(_wgpu_os iOS)
++    endif()
+     set(_wgpu_abi apple)
+ elseif(WIN32)
+     set(_wgpu_os Windows)
