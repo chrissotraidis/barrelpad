@@ -66,10 +66,15 @@ fi
 export SIMCTL_CHILD_MDKR_ROM="${DATA}/Documents/diddy-kong-racing.v64"
 export SIMCTL_CHILD_MDKR_APP_AUTOPLAY=1
 # Optional: scripted pad while agent also taps overlay
-if [ -n "${CHIMPPAD_INPUT_SCRIPT:-}" ] && [ -f "${CHIMPPAD_INPUT_SCRIPT}" ]; then
-  # Copy script into container so guest can read it
-  cp -f "$CHIMPPAD_INPUT_SCRIPT" "$DATA/Documents/input-script.txt"
+# Default to official TT race route so smoke reaches in-race gameplay.
+INPUT_SCRIPT="${CHIMPPAD_INPUT_SCRIPT:-$ROOT/ref/goldenballoon/tests/input_scripts/race_drive_time_trial.txt}"
+if [ ! -f "$INPUT_SCRIPT" ] && [ -f "$ROOT/sources/goldenballoon/tests/input_scripts/race_drive_time_trial.txt" ]; then
+  INPUT_SCRIPT="$ROOT/sources/goldenballoon/tests/input_scripts/race_drive_time_trial.txt"
+fi
+if [ -f "$INPUT_SCRIPT" ]; then
+  cp -f "$INPUT_SCRIPT" "$DATA/Documents/input-script.txt"
   export SIMCTL_CHILD_MDKR_APP_AUTOPLAY_INPUT_SCRIPT="$DATA/Documents/input-script.txt"
+  echo "[ChimpPad] input script: $INPUT_SCRIPT"
 fi
 
 echo "[ChimpPad] launching $BUNDLE (MDKR_APP_AUTOPLAY + Documents ROM)"
