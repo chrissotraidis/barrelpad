@@ -118,9 +118,13 @@ static unsigned int ChimpPad_ActionN64Bit(ChimpPadAction action) {
 static void ChimpPad_PublishPad(void) {
     /* Direct P1 merge into the engine input queue — reliable on iOS where a
      * virtual joystick is not always bound as the game's primary controller. */
+    static unsigned int sLastLoggedButtons = 0xFFFFFFFFu;
     platform_ios_touch_set(sHeldButtons, sStickX, sStickY, 1);
-    ChimpPad_Log("pad inject buttons=0x%04x stick=%d,%d", sHeldButtons, sStickX,
-                 sStickY);
+    if (sLastLoggedButtons != sHeldButtons) {
+        ChimpPad_Log("pad inject buttons=0x%04x stick=%d,%d", sHeldButtons,
+                     sStickX, sStickY);
+        sLastLoggedButtons = sHeldButtons;
+    }
 }
 
 /* Mirror face/shoulder actions onto the virtual gamepad when attached. */
@@ -282,33 +286,40 @@ static void ChimpPad_ResetAllInputs(void) {
 @property(nonatomic) BOOL outputPressed;
 @property(nonatomic) BOOL holdAssistEnabled;
 @property(nonatomic) BOOL holdLocked;
+@property(nonatomic) BOOL usesPillShape;
 @property(nonatomic) CFTimeInterval inputDownTime;
 @property(nonatomic) NSUInteger releaseGeneration;
 @property(nonatomic, copy) NSString *normalLabel;
 @property(nonatomic, strong) UIColor *idleColor;
 @property(nonatomic, strong) UIColor *pressedColor;
-- (instancetype)initWithLabel:(NSString *)label action:(ChimpPadAction)action;
+- (instancetype)initWithLabel:(NSString *)label
+                       action:(ChimpPadAction)action
+                         pill:(BOOL)pill;
 - (void)applyIdleColor:(UIColor *)idle pressedColor:(UIColor *)pressed;
 - (void)cancelInput;
 @end
 
 @implementation ChimpPadTouchButton
-- (instancetype)initWithLabel:(NSString *)label action:(ChimpPadAction)action {
+- (instancetype)initWithLabel:(NSString *)label
+                       action:(ChimpPadAction)action
+                         pill:(BOOL)pill {
     self = [super initWithFrame:CGRectZero];
     if (self) {
         self.action = action;
         self.normalLabel = label;
+        self.usesPillShape = pill;
         self.multipleTouchEnabled = YES;
-        self.idleColor = [UIColor colorWithWhite:0.08 alpha:0.62];
-        self.pressedColor = [UIColor colorWithWhite:0.85 alpha:0.78];
+        /* SpaghettiPad glass: light tint so the game stays readable. */
+        self.idleColor = [UIColor colorWithWhite:0.04 alpha:0.38];
+        self.pressedColor = [UIColor colorWithWhite:0.72 alpha:0.48];
         self.backgroundColor = self.idleColor;
-        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.78].CGColor;
+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.58].CGColor;
         self.layer.borderWidth = 2.0;
         [self setTitle:label forState:UIControlStateNormal];
         [self setTitleColor:[UIColor colorWithWhite:1.0 alpha:0.92]
                    forState:UIControlStateNormal];
         self.titleLabel.font =
-            [UIFont systemFontOfSize:17.0 weight:UIFontWeightSemibold];
+            [UIFont systemFontOfSize:18.0 weight:UIFontWeightSemibold];
         self.accessibilityLabel = label;
         [self addTarget:self
                       action:@selector(inputDown)
@@ -323,8 +334,10 @@ static void ChimpPad_ResetAllInputs(void) {
 
 - (void)layoutSubviews {
     [super layoutSubviews];
-    CGFloat m = MIN(CGRectGetWidth(self.bounds), CGRectGetHeight(self.bounds));
-    self.layer.cornerRadius = m * 0.5;
+    self.layer.cornerRadius =
+        self.usesPillShape ? CGRectGetHeight(self.bounds) * 0.48
+                           : MIN(CGRectGetWidth(self.bounds), CGRectGetHeight(self.bounds)) *
+                                 0.5;
 }
 
 - (void)inputDown {
@@ -359,13 +372,36 @@ static void ChimpPad_ResetAllInputs(void) {
     }
 }
 
-- (void)inputUp {
+- (void)finishInputRelease {
     if (!self.inputPressed) {
         return;
     }
     self.inputPressed = NO;
     [self updateOutput];
     [self updateAppearance];
+}
+
+- (void)inputUp {
+    if (!self.inputPressed) {
+        return;
+    }
+    /* SpaghettiPad: guarantee a minimum press window so short taps register. */
+    if (self.action != kChimpPadActionMenu) {
+        CFTimeInterval remaining =
+            MAX(0.0, 0.05 - (CACurrentMediaTime() - self.inputDownTime));
+        if (remaining > 0.0) {
+            NSUInteger generation = ++self.releaseGeneration;
+            dispatch_after(
+                dispatch_time(DISPATCH_TIME_NOW, (int64_t)(remaining * NSEC_PER_SEC)),
+                dispatch_get_main_queue(), ^{
+                    if (self.releaseGeneration == generation) {
+                        [self finishInputRelease];
+                    }
+                });
+            return;
+        }
+    }
+    [self finishInputRelease];
 }
 
 - (void)updateOutput {
@@ -384,18 +420,20 @@ static void ChimpPad_ResetAllInputs(void) {
         [self setTitle:@"A •" forState:UIControlStateNormal];
         self.layer.borderColor =
             [UIColor colorWithRed:0.42 green:0.88 blue:1.0 alpha:0.95].CGColor;
-        self.layer.borderWidth = 3.0;
+        self.layer.borderWidth = 4.0;
+        self.accessibilityValue = @"Acceleration locked";
     } else {
         [self setTitle:self.normalLabel forState:UIControlStateNormal];
-        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.78].CGColor;
+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.58].CGColor;
         self.layer.borderWidth = 2.0;
+        self.accessibilityValue = nil;
     }
 }
 
 - (void)applyIdleColor:(UIColor *)idle pressedColor:(UIColor *)pressed {
     self.idleColor = idle;
     self.pressedColor = pressed;
-    self.backgroundColor = idle;
+    [self updateAppearance];
 }
 
 - (void)cancelInput {
@@ -417,7 +455,7 @@ static void ChimpPad_ResetAllInputs(void) {
     self = [super initWithFrame:frame];
     if (self) {
         self.multipleTouchEnabled = NO;
-        self.backgroundColor = [UIColor colorWithWhite:0.10 alpha:0.55];
+        self.backgroundColor = [UIColor colorWithWhite:0.04 alpha:0.30];
         self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.42].CGColor;
         self.layer.borderWidth = 2.0;
         self.accessibilityLabel = @"Steering";
@@ -430,6 +468,12 @@ static void ChimpPad_ResetAllInputs(void) {
         [self addSubview:self.knob];
     }
     return self;
+}
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    /* Expand grab area slightly beyond the drawn ring (SpaghettiPad feel). */
+    CGRect expanded = CGRectInset(self.bounds, -18.0, -18.0);
+    return CGRectContainsPoint(expanded, point);
 }
 
 - (void)layoutSubviews {
@@ -457,10 +501,10 @@ static void ChimpPad_ResetAllInputs(void) {
         dy = dy / distance * radius;
     }
     self.knob.center = CGPointMake(center.x + dx, center.y + dy);
-    ChimpPadStickState st = ChimpPad_StickFromTouch(dx, dy, (float)radius);
-    Sint16 x = (Sint16)lround(st.x * SDL_JOYSTICK_AXIS_MAX);
-    /* ChimpPad_StickFromTouch already uses +up N64; SDL left-stick +y is down. */
-    Sint16 y = (Sint16)lround(-st.y * SDL_JOYSTICK_AXIS_MAX);
+    Sint16 x = (Sint16)lround(
+        MAX(-1.0, MIN(1.0, (double)(dx / radius))) * SDL_JOYSTICK_AXIS_MAX);
+    Sint16 y = (Sint16)lround(
+        MAX(-1.0, MIN(1.0, (double)(dy / radius))) * SDL_JOYSTICK_AXIS_MAX);
     ChimpPad_SetStickAxes(x, y);
 }
 
@@ -488,7 +532,6 @@ static void ChimpPad_ResetAllInputs(void) {
 }
 
 - (void)cancelInput {
-    /* Stick release must not clear face buttons or disable the touch pad. */
     sStickX = 0;
     sStickY = 0;
     ChimpPad_PublishPad();
@@ -506,13 +549,19 @@ static CGRect CP_Frame(CGPoint center, CGFloat w, CGFloat h) {
     return CGRectMake(center.x - w * 0.5, center.y - h * 0.5, w, h);
 }
 
+static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
+    return CGRectMake(CGRectGetWidth(bounds) - safe.right - size - 8.0,
+                      safe.top + 4.0, size, size);
+}
+
 @interface ChimpPadTouchOverlay : UIView
 @property(nonatomic, strong) ChimpPadTouchStick *stick;
 @property(nonatomic, strong) NSArray<ChimpPadTouchButton *> *buttons;
 @property(nonatomic, strong) ChimpPadTouchButton *buttonA;
 @property(nonatomic, strong) ChimpPadTouchButton *buttonB;
 @property(nonatomic, strong) ChimpPadTouchButton *buttonL;
-@property(nonatomic, strong) ChimpPadTouchButton *buttonZ;
+@property(nonatomic, strong) ChimpPadTouchButton *buttonZLeft;
+@property(nonatomic, strong) ChimpPadTouchButton *buttonZRight;
 @property(nonatomic, strong) ChimpPadTouchButton *buttonR;
 @property(nonatomic, strong) ChimpPadTouchButton *buttonStart;
 @property(nonatomic, strong) ChimpPadTouchButton *cUp;
@@ -531,31 +580,46 @@ static CGRect CP_Frame(CGPoint center, CGFloat w, CGFloat h) {
         self.multipleTouchEnabled = YES;
         self.stick = [[ChimpPadTouchStick alloc] initWithFrame:CGRectZero];
         self.buttonA = [[ChimpPadTouchButton alloc] initWithLabel:@"A"
-                                                           action:kChimpPadActionA];
+                                                           action:kChimpPadActionA
+                                                             pill:NO];
         self.buttonA.holdAssistEnabled = YES;
         self.buttonB = [[ChimpPadTouchButton alloc] initWithLabel:@"B"
-                                                           action:kChimpPadActionB];
+                                                           action:kChimpPadActionB
+                                                             pill:NO];
         self.buttonL = [[ChimpPadTouchButton alloc] initWithLabel:@"L"
-                                                           action:kChimpPadActionL];
-        self.buttonZ = [[ChimpPadTouchButton alloc] initWithLabel:@"Z"
-                                                           action:kChimpPadActionZ];
+                                                           action:kChimpPadActionL
+                                                             pill:NO];
+        /* Dual Z like SpaghettiPad: left thumb (item near stick) + right face. */
+        self.buttonZLeft = [[ChimpPadTouchButton alloc] initWithLabel:@"Z"
+                                                               action:kChimpPadActionZ
+                                                                 pill:NO];
+        self.buttonZRight = [[ChimpPadTouchButton alloc] initWithLabel:@"Z"
+                                                                action:kChimpPadActionZ
+                                                                  pill:NO];
         self.buttonR = [[ChimpPadTouchButton alloc] initWithLabel:@"R"
-                                                           action:kChimpPadActionR];
-        self.buttonStart = [[ChimpPadTouchButton alloc] initWithLabel:@"ST"
-                                                               action:kChimpPadActionStart];
+                                                           action:kChimpPadActionR
+                                                             pill:NO];
+        self.buttonStart = [[ChimpPadTouchButton alloc] initWithLabel:@"▶"
+                                                               action:kChimpPadActionStart
+                                                                 pill:NO];
         self.cUp = [[ChimpPadTouchButton alloc] initWithLabel:@"▲"
-                                                       action:kChimpPadActionCUp];
+                                                       action:kChimpPadActionCUp
+                                                         pill:NO];
         self.cDown = [[ChimpPadTouchButton alloc] initWithLabel:@"▼"
-                                                         action:kChimpPadActionCDown];
+                                                         action:kChimpPadActionCDown
+                                                           pill:NO];
         self.cLeft = [[ChimpPadTouchButton alloc] initWithLabel:@"◀"
-                                                         action:kChimpPadActionCLeft];
+                                                         action:kChimpPadActionCLeft
+                                                           pill:NO];
         self.cRight = [[ChimpPadTouchButton alloc] initWithLabel:@"▶"
-                                                          action:kChimpPadActionCRight];
+                                                          action:kChimpPadActionCRight
+                                                            pill:NO];
         self.menuButton = [[ChimpPadTouchButton alloc] initWithLabel:@"•••"
-                                                              action:kChimpPadActionMenu];
+                                                              action:kChimpPadActionMenu
+                                                                pill:YES];
 
         [self.buttonA
-            applyIdleColor:[UIColor colorWithRed:0.08 green:0.35 blue:0.88 alpha:0.78]
+            applyIdleColor:[UIColor colorWithRed:0.08 green:0.35 blue:0.88 alpha:0.58]
               pressedColor:[UIColor colorWithRed:0.14 green:0.48 blue:1.00 alpha:0.88]];
         [self.buttonB
             applyIdleColor:[UIColor colorWithRed:0.05 green:0.55 blue:0.24 alpha:0.58]
@@ -563,17 +627,24 @@ static CGRect CP_Frame(CGPoint center, CGFloat w, CGFloat h) {
         [self.buttonStart
             applyIdleColor:[UIColor colorWithRed:0.68 green:0.12 blue:0.16 alpha:0.52]
               pressedColor:[UIColor colorWithRed:0.94 green:0.22 blue:0.26 alpha:0.88]];
-        UIColor *cIdle = [UIColor colorWithRed:0.95 green:0.67 blue:0.12 alpha:0.72];
+        UIColor *cIdle = [UIColor colorWithRed:0.95 green:0.67 blue:0.12 alpha:0.48];
         UIColor *cPressed = [UIColor colorWithRed:1.00 green:0.78 blue:0.20 alpha:0.86];
         for (ChimpPadTouchButton *b in @[ self.cUp, self.cDown, self.cLeft, self.cRight ]) {
-            b.idleColor = cIdle;
-            b.pressedColor = cPressed;
-            b.backgroundColor = cIdle;
+            [b applyIdleColor:cIdle pressedColor:cPressed];
         }
 
+        self.buttonStart.accessibilityLabel = @"Start";
+        self.buttonZLeft.accessibilityLabel = @"Z above steering";
+        self.buttonZRight.accessibilityLabel = @"Z right";
+        self.cUp.accessibilityLabel = @"C Up";
+        self.cDown.accessibilityLabel = @"C Down";
+        self.cLeft.accessibilityLabel = @"C Left";
+        self.cRight.accessibilityLabel = @"C Right";
+        self.menuButton.accessibilityLabel = @"Menu";
+
         self.buttons = @[
-            self.buttonA, self.buttonB, self.buttonL, self.buttonZ, self.buttonR,
-            self.buttonStart, self.cUp, self.cDown, self.cLeft, self.cRight,
+            self.buttonA, self.buttonB, self.buttonL, self.buttonZLeft, self.buttonZRight,
+            self.buttonR, self.buttonStart, self.cUp, self.cDown, self.cLeft, self.cRight,
             self.menuButton
         ];
         [self addSubview:self.stick];
@@ -584,11 +655,6 @@ static CGRect CP_Frame(CGPoint center, CGFloat w, CGFloat h) {
     return self;
 }
 
-/* Silence missing applyIdleColor if category not on base — implement here. */
-- (void)doesNotRecognizeSelector:(SEL)aSelector {
-    [super doesNotRecognizeSelector:aSelector];
-}
-
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     UIView *hit = [super hitTest:point withEvent:event];
     return hit == self ? nil : hit;
@@ -596,63 +662,157 @@ static CGRect CP_Frame(CGPoint center, CGFloat w, CGFloat h) {
 
 - (void)layoutSubviews {
     [super layoutSubviews];
-    /* Keep overlay above the SDL/Metal view after surface recreates. */
     if (self.superview != nil) {
         [self.superview bringSubviewToFront:self];
     }
     UIEdgeInsets safe = self.safeAreaInsets;
     CGFloat width = CGRectGetWidth(self.bounds);
     CGFloat height = CGRectGetHeight(self.bounds);
-    ChimpPadLayoutKind kind = ChimpPad_LayoutKindForSize((float)width, (float)height);
-    BOOL phone = (kind == kChimpPadLayoutPhone);
+    /* SpaghettiPad: height < 560 → purpose-built phone layout (not a shrink). */
+    BOOL compact = height < 560.0;
 
-    CGFloat left = safe.left + (phone ? 10.0 : 24.0);
-    CGFloat right = safe.right + (phone ? 10.0 : 24.0);
-    CGFloat bottom = safe.bottom + (phone ? 10.0 : 20.0);
-    CGFloat top = safe.top + 8.0;
+    if (compact) {
+        CGFloat left = safe.left + 10.0;
+        CGFloat right = safe.right + 10.0;
+        CGFloat top = safe.top + 36.0;
+        CGFloat shoulderHeight = 44.0;
 
-    CGFloat stickSize = phone ? 124.0 : 150.0;
-    CGPoint stickCenter =
-        CGPointMake(left + stickSize * 0.55, height - bottom - stickSize * 0.55);
-    self.stick.frame = CP_Frame(stickCenter, stickSize, stickSize);
+        CGFloat stickSize = 116.0;
+        CGPoint stickCenter =
+            CGPointMake(left + 88.0, height - safe.bottom - 88.0);
+        self.stick.frame = CP_Frame(stickCenter, stickSize, stickSize);
 
-    CGFloat shoulder = phone ? 48.0 : 54.0;
-    self.buttonZ.frame =
-        CP_Frame(CGPointMake(stickCenter.x + 8.0,
-                             CGRectGetMinY(self.stick.frame) - 8.0 - shoulder * 0.5),
-                 shoulder, shoulder);
-    self.buttonL.frame =
-        CP_Frame(CGPointMake(stickCenter.x - shoulder - 4.0,
-                             CGRectGetMidY(self.buttonZ.frame)),
-                 shoulder, shoulder);
+        CGFloat stickZSize = 50.0;
+        CGFloat stickZGap = 8.0;
+        self.buttonZLeft.frame = CP_Frame(
+            CGPointMake(stickCenter.x,
+                        CGRectGetMinY(self.stick.frame) - stickZGap - stickZSize * 0.5),
+            stickZSize, stickZSize);
+        self.buttonL.frame = CP_Frame(
+            CGPointMake(stickCenter.x - stickZSize - stickZGap,
+                        CGRectGetMidY(self.buttonZLeft.frame)),
+            stickZSize, stickZSize);
+        self.buttonR.frame = CP_Frame(
+            CGPointMake(stickCenter.x + stickZSize + stickZGap,
+                        CGRectGetMidY(self.buttonZLeft.frame)),
+            stickZSize, stickZSize);
 
-    CGFloat aSize = phone ? 78.0 : 90.0;
-    CGFloat bSize = phone ? 64.0 : 72.0;
-    CGFloat rSize = phone ? 56.0 : 64.0;
-    CGPoint aCenter =
-        CGPointMake(width - right - aSize * 0.55, height - bottom - aSize * 0.55);
-    self.buttonA.frame = CP_Frame(aCenter, aSize, aSize);
-    self.buttonB.frame =
-        CP_Frame(CGPointMake(aCenter.x - bSize - 12.0, aCenter.y + 8.0), bSize, bSize);
-    self.buttonR.frame =
-        CP_Frame(CGPointMake(aCenter.x + 4.0, aCenter.y - aSize * 0.85), rSize, rSize);
+        CGFloat rightCenterX = width - right - 58.0;
+        CGFloat faceCenterY = height - safe.bottom - 82.0;
+        CGFloat faceSize = 52.0;
+        CGFloat aSize = 58.0;
+        CGFloat bSize = 54.0;
+        self.buttonA.frame =
+            CP_Frame(CGPointMake(rightCenterX + 22.0, faceCenterY + 18.0), aSize, aSize);
+        self.buttonB.frame =
+            CP_Frame(CGPointMake(rightCenterX - 34.0, faceCenterY + 2.0), bSize, bSize);
+        self.buttonZRight.frame =
+            CP_Frame(CGPointMake(rightCenterX + 12.0, faceCenterY - 44.0), faceSize,
+                     faceSize);
 
-    CGFloat cSize = phone ? 40.0 : 46.0;
-    CGPoint cCenter = CGPointMake(aCenter.x - 10.0, top + cSize * 2.2 + 20.0);
-    self.cUp.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y - cSize), cSize, cSize);
-    self.cDown.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y + cSize), cSize, cSize);
-    self.cLeft.frame = CP_Frame(CGPointMake(cCenter.x - cSize, cCenter.y), cSize, cSize);
-    self.cRight.frame = CP_Frame(CGPointMake(cCenter.x + cSize, cCenter.y), cSize, cSize);
+        CGFloat compactMenuSize = 38.0;
+        CGRect menuFrame = CP_MenuFrame(self.bounds, safe, compactMenuSize);
+        self.menuButton.frame = menuFrame;
+        CGFloat startGap = 6.0;
+        self.buttonStart.frame = CP_Frame(
+            CGPointMake(CGRectGetMidX(menuFrame),
+                        CGRectGetMaxY(menuFrame) + startGap + shoulderHeight * 0.5),
+            shoulderHeight, shoulderHeight);
 
-    CGFloat startW = phone ? 52.0 : 58.0;
-    self.menuButton.frame =
-        CGRectMake(width - right - startW, top, startW, 28.0);
-    self.buttonStart.frame =
-        CGRectMake(width - right - startW, top + 32.0, startW, 36.0);
+        CGFloat cSize = 40.0;
+        CGFloat cRadius = 34.0;
+        CGPoint cCenter = CGPointMake(width - safe.right - cRadius - cSize * 0.5 - 4.0,
+                                      top + shoulderHeight + 75.0);
+        self.cUp.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y - cRadius), cSize, cSize);
+        self.cDown.frame =
+            CP_Frame(CGPointMake(cCenter.x, cCenter.y + cRadius), cSize, cSize);
+        self.cLeft.frame =
+            CP_Frame(CGPointMake(cCenter.x - cRadius, cCenter.y), cSize, cSize);
+        self.cRight.frame =
+            CP_Frame(CGPointMake(cCenter.x + cRadius, cCenter.y), cSize, cSize);
 
-    ChimpPad_Log("layout kind=%s size=%.0fx%.0f safe L%.0f R%.0f T%.0f B%.0f",
-                 phone ? "phone" : "tablet", width, height, safe.left, safe.right,
-                 safe.top, safe.bottom);
+        for (ChimpPadTouchButton *button in self.buttons) {
+            button.titleLabel.font =
+                [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
+        }
+        self.buttonA.titleLabel.font =
+            [UIFont systemFontOfSize:18.0 weight:UIFontWeightBold];
+        self.buttonB.titleLabel.font =
+            [UIFont systemFontOfSize:17.0 weight:UIFontWeightBold];
+        self.buttonStart.titleLabel.font =
+            [UIFont systemFontOfSize:15.0 weight:UIFontWeightBold];
+        return;
+    }
+
+    /* Tablet / large landscape — SpaghettiPad rail layout. */
+    CGFloat scale = MAX(0.78, MIN(1.12, height / 834.0));
+    CGFloat usableWidth = width - safe.left - safe.right;
+    CGFloat railWidth = MIN(250.0 * scale, usableWidth * 0.22);
+    CGFloat leftCenter = safe.left + railWidth * 0.5;
+    CGFloat rightCenter = width - safe.right - railWidth * 0.5;
+    CGFloat middleCenterY = height * 0.60;
+    CGFloat lowCenterY = height * 0.86;
+    CGFloat stickCenterX = leftCenter + 65.0 * scale;
+    CGFloat stickCenterY = lowCenterY - 70.0 * scale;
+    CGFloat faceCenterX = rightCenter + 24.0 * scale;
+    CGFloat faceCenterY = middleCenterY + 30.0 * scale;
+    CGFloat cpadCenterX = rightCenter + 24.0 * scale;
+    CGFloat cpadCenterY = lowCenterY - 20.0 * scale;
+
+    CGFloat stickSize = 150.0 * scale;
+    self.stick.frame =
+        CP_Frame(CGPointMake(stickCenterX, stickCenterY), stickSize, stickSize);
+    CGFloat stickZSize = 56.0 * scale;
+    CGFloat stickZGap = 12.0 * scale;
+    self.buttonZLeft.frame = CP_Frame(
+        CGPointMake(stickCenterX,
+                    CGRectGetMinY(self.stick.frame) - stickZGap - stickZSize * 0.5),
+        stickZSize, stickZSize);
+    self.buttonL.frame = CP_Frame(
+        CGPointMake(stickCenterX - stickZSize - stickZGap,
+                    CGRectGetMidY(self.buttonZLeft.frame)),
+        stickZSize, stickZSize);
+    self.buttonR.frame = CP_Frame(
+        CGPointMake(stickCenterX + stickZSize + stickZGap,
+                    CGRectGetMidY(self.buttonZLeft.frame)),
+        stickZSize, stickZSize);
+
+    CGFloat faceSize = 66.0 * scale;
+    CGFloat faceX = faceCenterX - faceSize * 0.5;
+    self.buttonA.frame =
+        CGRectMake(faceX, faceCenterY + 12.0 * scale, faceSize, faceSize);
+    self.buttonB.frame = CP_Frame(
+        CGPointMake(faceX - faceSize * 0.5 - 10.0 * scale, faceCenterY), faceSize,
+        faceSize);
+    self.buttonZRight.frame =
+        CGRectMake(faceX, faceCenterY - faceSize - 12.0 * scale, faceSize, faceSize);
+    CGFloat startSize = 54.0 * scale;
+    CGFloat startGap = 12.0 * scale;
+    self.buttonStart.frame = CP_Frame(
+        CGPointMake(CGRectGetMidX(self.buttonZRight.frame),
+                    CGRectGetMinY(self.buttonZRight.frame) - startGap - startSize * 0.5),
+        startSize, startSize);
+
+    CGFloat menuSize = 44.0 * scale;
+    self.menuButton.frame = CP_MenuFrame(self.bounds, safe, menuSize);
+
+    CGFloat cSize = 46.0 * scale;
+    CGFloat cRadius = 44.0 * scale;
+    CGPoint cCenter = CGPointMake(cpadCenterX, cpadCenterY);
+    self.cUp.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y - cRadius), cSize, cSize);
+    self.cDown.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y + cRadius), cSize, cSize);
+    self.cLeft.frame = CP_Frame(CGPointMake(cCenter.x - cRadius, cCenter.y), cSize, cSize);
+    self.cRight.frame = CP_Frame(CGPointMake(cCenter.x + cRadius, cCenter.y), cSize, cSize);
+
+    CGFloat labelSize = 18.0 * scale;
+    for (ChimpPadTouchButton *button in self.buttons) {
+        button.titleLabel.font =
+            [UIFont systemFontOfSize:labelSize weight:UIFontWeightSemibold];
+    }
+    self.buttonStart.titleLabel.font =
+        [UIFont systemFontOfSize:18.0 * scale weight:UIFontWeightBold];
+    self.buttonA.titleLabel.font =
+        [UIFont systemFontOfSize:20.0 * scale weight:UIFontWeightBold];
 }
 
 - (void)cancelAllInputs {

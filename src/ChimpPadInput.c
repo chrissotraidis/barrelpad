@@ -213,133 +213,129 @@ int ChimpPad_DefaultLayout(ChimpPadLayoutKind kind,
         return 0;
     }
 
-    /* Normalized rects: x,y top-left of control, w,h size relative to safe area.
-     * Stick left; A/B/Z/R right; C cluster upper-right; Start/Menu top-right. */
+    /* SpaghettiPad-style grip: stick + L/Z/R left; face A/B/Z + C right. */
     enum { kMax = 16 };
     ChimpPadControlSpec phone[kMax];
     ChimpPadControlSpec tablet[kMax];
     int n = 0;
-
-    /* Shared skeleton; phone uses larger primary hit targets. */
     ChimpPadControlSpec *dst = (kind == kChimpPadLayoutTablet) ? tablet : phone;
 
     dst[n++] = (ChimpPadControlSpec){
-        .action = kChimpPadActionA, /* placeholder; isStick marks well */
+        .action = kChimpPadActionA,
         .label = "Stick",
-        .rect = {.x = 0.04f, .y = 0.42f, .w = 0.22f, .h = 0.42f},
+        .rect = {.x = 0.04f, .y = 0.52f, .w = 0.24f, .h = 0.40f},
         .isStick = true,
     };
+    /* L / Z / R row above the stick (left thumb). */
     dst[n++] = (ChimpPadControlSpec){
         .action = kChimpPadActionL,
         .label = "L",
-        .rect = {.x = 0.04f, .y = 0.18f, .w = 0.09f, .h = 0.12f},
-        .isStick = false,
+        .rect = {.x = 0.02f, .y = 0.36f, .w = 0.09f, .h = 0.12f},
     };
     dst[n++] = (ChimpPadControlSpec){
         .action = kChimpPadActionZ,
         .label = "Z",
-        .rect = {.x = 0.15f, .y = 0.18f, .w = 0.09f, .h = 0.12f},
-        .isStick = false,
+        .rect = {.x = 0.12f, .y = 0.36f, .w = 0.09f, .h = 0.12f},
+    };
+    dst[n++] = (ChimpPadControlSpec){
+        .action = kChimpPadActionR,
+        .label = "R",
+        .rect = {.x = 0.22f, .y = 0.36f, .w = 0.09f, .h = 0.12f},
     };
 
     if (kind == kChimpPadLayoutPhone) {
-        /* Enlarged A / B / R for thumb reach (DKR accelerate / brake / hop). */
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionA,
             .label = "A",
-            .rect = {.x = 0.72f, .y = 0.52f, .w = 0.14f, .h = 0.22f},
+            .rect = {.x = 0.78f, .y = 0.62f, .w = 0.14f, .h = 0.20f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionB,
             .label = "B",
-            .rect = {.x = 0.58f, .y = 0.58f, .w = 0.12f, .h = 0.18f},
+            .rect = {.x = 0.62f, .y = 0.58f, .w = 0.12f, .h = 0.16f},
         };
         dst[n++] = (ChimpPadControlSpec){
-            .action = kChimpPadActionR,
-            .label = "R",
-            .rect = {.x = 0.78f, .y = 0.30f, .w = 0.12f, .h = 0.14f},
+            .action = kChimpPadActionZ,
+            .label = "Z",
+            .rect = {.x = 0.76f, .y = 0.40f, .w = 0.12f, .h = 0.14f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionCUp,
             .label = "C↑",
-            .rect = {.x = 0.70f, .y = 0.14f, .w = 0.07f, .h = 0.09f},
+            .rect = {.x = 0.78f, .y = 0.18f, .w = 0.07f, .h = 0.09f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionCDown,
             .label = "C↓",
-            .rect = {.x = 0.70f, .y = 0.28f, .w = 0.07f, .h = 0.09f},
+            .rect = {.x = 0.78f, .y = 0.32f, .w = 0.07f, .h = 0.09f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionCLeft,
             .label = "C←",
-            .rect = {.x = 0.62f, .y = 0.21f, .w = 0.07f, .h = 0.09f},
+            .rect = {.x = 0.70f, .y = 0.25f, .w = 0.07f, .h = 0.09f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionCRight,
             .label = "C→",
-            .rect = {.x = 0.78f, .y = 0.21f, .w = 0.07f, .h = 0.09f},
+            .rect = {.x = 0.86f, .y = 0.25f, .w = 0.07f, .h = 0.09f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionStart,
             .label = "Start",
-            .rect = {.x = 0.86f, .y = 0.06f, .w = 0.10f, .h = 0.08f},
+            .rect = {.x = 0.88f, .y = 0.08f, .w = 0.08f, .h = 0.09f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionMenu,
             .label = "•••",
-            .rect = {.x = 0.86f, .y = 0.00f, .w = 0.10f, .h = 0.06f},
+            .rect = {.x = 0.88f, .y = 0.00f, .w = 0.08f, .h = 0.07f},
         };
     } else {
-        /* Tablet: more margin, slightly larger C cluster. */
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionA,
             .label = "A",
-            .rect = {.x = 0.78f, .y = 0.50f, .w = 0.12f, .h = 0.20f},
+            .rect = {.x = 0.80f, .y = 0.52f, .w = 0.12f, .h = 0.18f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionB,
             .label = "B",
-            .rect = {.x = 0.66f, .y = 0.56f, .w = 0.10f, .h = 0.16f},
+            .rect = {.x = 0.68f, .y = 0.48f, .w = 0.10f, .h = 0.14f},
         };
         dst[n++] = (ChimpPadControlSpec){
-            .action = kChimpPadActionR,
-            .label = "R",
-            .rect = {.x = 0.82f, .y = 0.28f, .w = 0.10f, .h = 0.12f},
+            .action = kChimpPadActionZ,
+            .label = "Z",
+            .rect = {.x = 0.80f, .y = 0.32f, .w = 0.10f, .h = 0.12f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionCUp,
             .label = "C↑",
-            .rect = {.x = 0.74f, .y = 0.16f, .w = 0.06f, .h = 0.08f},
+            .rect = {.x = 0.80f, .y = 0.72f, .w = 0.06f, .h = 0.08f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionCDown,
             .label = "C↓",
-            .rect = {.x = 0.74f, .y = 0.28f, .w = 0.06f, .h = 0.08f},
+            .rect = {.x = 0.80f, .y = 0.84f, .w = 0.06f, .h = 0.08f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionCLeft,
             .label = "C←",
-            .rect = {.x = 0.67f, .y = 0.22f, .w = 0.06f, .h = 0.08f},
+            .rect = {.x = 0.73f, .y = 0.78f, .w = 0.06f, .h = 0.08f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionCRight,
             .label = "C→",
-            .rect = {.x = 0.81f, .y = 0.22f, .w = 0.06f, .h = 0.08f},
+            .rect = {.x = 0.87f, .y = 0.78f, .w = 0.06f, .h = 0.08f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionStart,
             .label = "Start",
-            .rect = {.x = 0.88f, .y = 0.08f, .w = 0.08f, .h = 0.07f},
+            .rect = {.x = 0.80f, .y = 0.18f, .w = 0.08f, .h = 0.08f},
         };
         dst[n++] = (ChimpPadControlSpec){
             .action = kChimpPadActionMenu,
             .label = "•••",
-            .rect = {.x = 0.88f, .y = 0.01f, .w = 0.08f, .h = 0.06f},
+            .rect = {.x = 0.90f, .y = 0.02f, .w = 0.07f, .h = 0.06f},
         };
-        /* Enlarge stick well slightly on tablet. */
-        dst[0].rect = (ChimpPadLayoutRect){.x = 0.05f, .y = 0.40f, .w = 0.20f, .h = 0.40f};
-        dst[1].rect = (ChimpPadLayoutRect){.x = 0.05f, .y = 0.20f, .w = 0.08f, .h = 0.10f};
-        dst[2].rect = (ChimpPadLayoutRect){.x = 0.15f, .y = 0.20f, .w = 0.08f, .h = 0.10f};
+        dst[0].rect = (ChimpPadLayoutRect){.x = 0.05f, .y = 0.48f, .w = 0.20f, .h = 0.38f};
     }
 
     int count = n < maxSpecs ? n : maxSpecs;
