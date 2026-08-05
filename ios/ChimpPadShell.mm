@@ -672,75 +672,100 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
     BOOL compact = height < 560.0;
 
     if (compact) {
-        CGFloat left = safe.left + 10.0;
-        CGFloat right = safe.right + 10.0;
-        CGFloat top = safe.top + 36.0;
-        CGFloat shoulderHeight = 44.0;
+        /*
+         * Phone landscape is short (~320–430 pt). SpaghettiPad's absolute
+         * C-pad Y collides with the right Z on that height — visible as Z
+         * sitting inside the C diamond. Lay the right rail out as a single
+         * bottom-up stack (A/B/Z) and park C-pad inboard of the face, with
+         * Start/Menu on the top-right safe corner only.
+         */
+        CGFloat left = safe.left + 8.0;
+        CGFloat right = safe.right + 8.0;
+        CGFloat bottom = safe.bottom + 8.0;
+        /* Scale slightly on very short landscape so nothing overlaps. */
+        CGFloat s = MAX(0.82, MIN(1.0, height / 390.0));
 
-        CGFloat stickSize = 116.0;
+        CGFloat stickSize = 108.0 * s;
         CGPoint stickCenter =
-            CGPointMake(left + 88.0, height - safe.bottom - 88.0);
+            CGPointMake(left + stickSize * 0.58, height - bottom - stickSize * 0.55);
         self.stick.frame = CP_Frame(stickCenter, stickSize, stickSize);
 
-        CGFloat stickZSize = 50.0;
-        CGFloat stickZGap = 8.0;
+        CGFloat shoulder = 46.0 * s;
+        CGFloat shoulderGap = 7.0 * s;
         self.buttonZLeft.frame = CP_Frame(
             CGPointMake(stickCenter.x,
-                        CGRectGetMinY(self.stick.frame) - stickZGap - stickZSize * 0.5),
-            stickZSize, stickZSize);
+                        CGRectGetMinY(self.stick.frame) - shoulderGap - shoulder * 0.5),
+            shoulder, shoulder);
         self.buttonL.frame = CP_Frame(
-            CGPointMake(stickCenter.x - stickZSize - stickZGap,
+            CGPointMake(stickCenter.x - shoulder - shoulderGap,
                         CGRectGetMidY(self.buttonZLeft.frame)),
-            stickZSize, stickZSize);
+            shoulder, shoulder);
         self.buttonR.frame = CP_Frame(
-            CGPointMake(stickCenter.x + stickZSize + stickZGap,
+            CGPointMake(stickCenter.x + shoulder + shoulderGap,
                         CGRectGetMidY(self.buttonZLeft.frame)),
-            stickZSize, stickZSize);
+            shoulder, shoulder);
 
-        CGFloat rightCenterX = width - right - 58.0;
-        CGFloat faceCenterY = height - safe.bottom - 82.0;
-        CGFloat faceSize = 52.0;
-        CGFloat aSize = 58.0;
-        CGFloat bSize = 54.0;
-        self.buttonA.frame =
-            CP_Frame(CGPointMake(rightCenterX + 22.0, faceCenterY + 18.0), aSize, aSize);
+        /* Face rail: A outer-bottom, B inboard, Z above A — no C in this column. */
+        CGFloat aSize = 56.0 * s;
+        CGFloat bSize = 50.0 * s;
+        CGFloat zSize = 48.0 * s;
+        CGFloat aX = width - right - aSize * 0.55;
+        CGFloat aY = height - bottom - aSize * 0.55;
+        self.buttonA.frame = CP_Frame(CGPointMake(aX, aY), aSize, aSize);
         self.buttonB.frame =
-            CP_Frame(CGPointMake(rightCenterX - 34.0, faceCenterY + 2.0), bSize, bSize);
+            CP_Frame(CGPointMake(aX - bSize - 10.0 * s, aY + 4.0 * s), bSize, bSize);
         self.buttonZRight.frame =
-            CP_Frame(CGPointMake(rightCenterX + 12.0, faceCenterY - 44.0), faceSize,
-                     faceSize);
+            CP_Frame(CGPointMake(aX + 2.0 * s, aY - aSize * 0.55 - zSize * 0.55 - 6.0 * s),
+                     zSize, zSize);
 
-        CGFloat compactMenuSize = 38.0;
-        CGRect menuFrame = CP_MenuFrame(self.bounds, safe, compactMenuSize);
+        /* Menu + Start: top-right only (do not share the face column mid-band). */
+        CGFloat menuSize = 36.0 * s;
+        CGRect menuFrame = CP_MenuFrame(self.bounds, safe, menuSize);
         self.menuButton.frame = menuFrame;
-        CGFloat startGap = 6.0;
+        CGFloat startSize = 40.0 * s;
         self.buttonStart.frame = CP_Frame(
             CGPointMake(CGRectGetMidX(menuFrame),
-                        CGRectGetMaxY(menuFrame) + startGap + shoulderHeight * 0.5),
-            shoulderHeight, shoulderHeight);
+                        CGRectGetMaxY(menuFrame) + 4.0 + startSize * 0.5),
+            startSize, startSize);
 
-        CGFloat cSize = 40.0;
-        CGFloat cRadius = 34.0;
-        CGPoint cCenter = CGPointMake(width - safe.right - cRadius - cSize * 0.5 - 4.0,
-                                      top + shoulderHeight + 75.0);
-        self.cUp.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y - cRadius), cSize, cSize);
-        self.cDown.frame =
-            CP_Frame(CGPointMake(cCenter.x, cCenter.y + cRadius), cSize, cSize);
-        self.cLeft.frame =
-            CP_Frame(CGPointMake(cCenter.x - cRadius, cCenter.y), cSize, cSize);
-        self.cRight.frame =
-            CP_Frame(CGPointMake(cCenter.x + cRadius, cCenter.y), cSize, cSize);
+        /*
+         * C-pad inboard of the face rail, vertically between Start and Z so it
+         * never shares the Z/A column (the bug in the user screenshot).
+         */
+        CGFloat cSize = 34.0 * s;
+        CGFloat cRadius = 30.0 * s;
+        CGFloat cX = CGRectGetMinX(self.buttonB.frame) - cRadius - cSize * 0.35 - 6.0 * s;
+        CGFloat zTop = CGRectGetMinY(self.buttonZRight.frame);
+        CGFloat startBottom = CGRectGetMaxY(self.buttonStart.frame);
+        CGFloat cY = (startBottom + zTop) * 0.5;
+        /* Keep C clear of Start and Z if the band is tight. */
+        CGFloat cHalf = cRadius + cSize * 0.5;
+        if (cY - cHalf < startBottom + 4.0) {
+            cY = startBottom + 4.0 + cHalf;
+        }
+        if (cY + cHalf > zTop - 4.0) {
+            cY = zTop - 4.0 - cHalf;
+        }
+        /* Fallback: if still no room, park C left of B at face height. */
+        if (cY + cHalf > zTop - 2.0 || cY - cHalf < startBottom + 2.0) {
+            cX = CGRectGetMinX(self.buttonB.frame) - cRadius - cSize * 0.5 - 8.0 * s;
+            cY = CGRectGetMidY(self.buttonB.frame);
+        }
+        self.cUp.frame = CP_Frame(CGPointMake(cX, cY - cRadius), cSize, cSize);
+        self.cDown.frame = CP_Frame(CGPointMake(cX, cY + cRadius), cSize, cSize);
+        self.cLeft.frame = CP_Frame(CGPointMake(cX - cRadius, cY), cSize, cSize);
+        self.cRight.frame = CP_Frame(CGPointMake(cX + cRadius, cY), cSize, cSize);
 
         for (ChimpPadTouchButton *button in self.buttons) {
             button.titleLabel.font =
-                [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
+                [UIFont systemFontOfSize:14.0 * s weight:UIFontWeightSemibold];
         }
         self.buttonA.titleLabel.font =
-            [UIFont systemFontOfSize:18.0 weight:UIFontWeightBold];
+            [UIFont systemFontOfSize:17.0 * s weight:UIFontWeightBold];
         self.buttonB.titleLabel.font =
-            [UIFont systemFontOfSize:17.0 weight:UIFontWeightBold];
+            [UIFont systemFontOfSize:16.0 * s weight:UIFontWeightBold];
         self.buttonStart.titleLabel.font =
-            [UIFont systemFontOfSize:15.0 weight:UIFontWeightBold];
+            [UIFont systemFontOfSize:14.0 * s weight:UIFontWeightBold];
         return;
     }
 
