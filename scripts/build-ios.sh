@@ -63,7 +63,10 @@ cmake --build "$BUILD" -j"${BARRELPAD_JOBS:-$(sysctl -n hw.ncpu)}" --target mdkr
 
 # Package BarrelPad.app
 APP="$BUILD/BarrelPad.app"
-mkdir -p "$APP"
+# Recreate the generated bundle so a prior local signature, profile, or stale
+# executable can never leak into a new unsigned product.
+cmake -E remove_directory "$APP"
+cmake -E make_directory "$APP"
 cp -f "$BUILD/mdkr64.app/mdkr64" "$APP/BarrelPad"
 # Apps without modern launch-screen metadata are placed in the legacy 480x320
 # iPhone compatibility canvas. Always package the reviewed native template.

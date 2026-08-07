@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 814753b..ae6ada6 100644
+index 814753b..4fbaff0 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
@@ -165,7 +165,7 @@ index ad872c5..8b3a009 100644
      # Rust std runtime).
      target_link_libraries(webgpu INTERFACE
 diff --git a/cmake/webgpu_artifact.cmake b/cmake/webgpu_artifact.cmake
-index b10af08..c764c03 100644
+index b10af08..53e61bc 100644
 --- a/cmake/webgpu_artifact.cmake
 +++ b/cmake/webgpu_artifact.cmake
 @@ -25,6 +25,19 @@ function(mdkr_select_wgpu_artifact os cpu abi out_supported out_asset out_sha ou
@@ -204,7 +204,7 @@ index b6abdcf..70d8bf6 100644
  #else
  inline void AppActivation_requestForeground(SDL_Window *window, void *nativeView = nullptr) {
 diff --git a/platform/app/app_host.cpp b/platform/app/app_host.cpp
-index 055d0d2..4985cb1 100644
+index 055d0d2..9e26561 100644
 --- a/platform/app/app_host.cpp
 +++ b/platform/app/app_host.cpp
 @@ -1,5 +1,11 @@
@@ -279,7 +279,7 @@ index 055d0d2..4985cb1 100644
  }
  
 diff --git a/platform/app/arg_triage.cpp b/platform/app/arg_triage.cpp
-index fbc11ac..cfdb5cc 100644
+index fbc11ac..36532a0 100644
 --- a/platform/app/arg_triage.cpp
 +++ b/platform/app/arg_triage.cpp
 @@ -3,6 +3,10 @@
@@ -323,7 +323,7 @@ index fbc11ac..cfdb5cc 100644
      // engine what to do". Only a bare invocation (the .app double-click, or a
      // user typing `mdkr64`) opens the launcher.
 diff --git a/platform/app/main_app.cpp b/platform/app/main_app.cpp
-index 2e85652..6e4c48d 100644
+index 2e85652..f7069b6 100644
 --- a/platform/app/main_app.cpp
 +++ b/platform/app/main_app.cpp
 @@ -8,6 +8,12 @@
@@ -353,10 +353,10 @@ index 2e85652..6e4c48d 100644
          return dumpSchema();
 diff --git a/platform/barrelpad/BarrelPadInput.c b/platform/barrelpad/BarrelPadInput.c
 new file mode 100644
-index 0000000..4d3bfdb
+index 0000000..f7c2a71
 --- /dev/null
 +++ b/platform/barrelpad/BarrelPadInput.c
-@@ -0,0 +1,348 @@
+@@ -0,0 +1,349 @@
 +#include "BarrelPadInput.h"
 +
 +#include <math.h>
@@ -374,6 +374,11 @@ index 0000000..4d3bfdb
 +        return hi;
 +    }
 +    return v;
++}
++
++bool BarrelPad_GameplayTouchEnabled(bool preferenceEnabled,
++                                    bool physicalControllerConnected) {
++    return preferenceEnabled && !physicalControllerConnected;
 +}
 +
 +BarrelPadStickState BarrelPad_StickFromTouch(float dx, float dy, float radius) {
@@ -572,133 +577,129 @@ index 0000000..4d3bfdb
 +        return 0;
 +    }
 +
-+    /* Normalized rects: x,y top-left of control, w,h size relative to safe area.
-+     * Stick left; A/B/Z/R right; C cluster upper-right; Start/Menu top-right. */
++    /* SpaghettiPad-style grip: stick + L/Z/R left; face A/B/Z + C right. */
 +    enum { kMax = 16 };
 +    BarrelPadControlSpec phone[kMax];
 +    BarrelPadControlSpec tablet[kMax];
 +    int n = 0;
-+
-+    /* Shared skeleton; phone uses larger primary hit targets. */
 +    BarrelPadControlSpec *dst = (kind == kBarrelPadLayoutTablet) ? tablet : phone;
 +
 +    dst[n++] = (BarrelPadControlSpec){
-+        .action = kBarrelPadActionA, /* placeholder; isStick marks well */
++        .action = kBarrelPadActionA,
 +        .label = "Stick",
-+        .rect = {.x = 0.04f, .y = 0.42f, .w = 0.22f, .h = 0.42f},
++        .rect = {.x = 0.04f, .y = 0.52f, .w = 0.24f, .h = 0.40f},
 +        .isStick = true,
 +    };
++    /* L / Z / R row above the stick (left thumb). */
 +    dst[n++] = (BarrelPadControlSpec){
 +        .action = kBarrelPadActionL,
 +        .label = "L",
-+        .rect = {.x = 0.04f, .y = 0.18f, .w = 0.09f, .h = 0.12f},
-+        .isStick = false,
++        .rect = {.x = 0.02f, .y = 0.36f, .w = 0.09f, .h = 0.12f},
 +    };
 +    dst[n++] = (BarrelPadControlSpec){
 +        .action = kBarrelPadActionZ,
 +        .label = "Z",
-+        .rect = {.x = 0.15f, .y = 0.18f, .w = 0.09f, .h = 0.12f},
-+        .isStick = false,
++        .rect = {.x = 0.12f, .y = 0.36f, .w = 0.09f, .h = 0.12f},
++    };
++    dst[n++] = (BarrelPadControlSpec){
++        .action = kBarrelPadActionR,
++        .label = "R",
++        .rect = {.x = 0.22f, .y = 0.36f, .w = 0.09f, .h = 0.12f},
 +    };
 +
 +    if (kind == kBarrelPadLayoutPhone) {
-+        /* Enlarged A / B / R for thumb reach (DKR accelerate / brake / hop). */
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionA,
 +            .label = "A",
-+            .rect = {.x = 0.72f, .y = 0.52f, .w = 0.14f, .h = 0.22f},
++            .rect = {.x = 0.78f, .y = 0.62f, .w = 0.14f, .h = 0.20f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionB,
 +            .label = "B",
-+            .rect = {.x = 0.58f, .y = 0.58f, .w = 0.12f, .h = 0.18f},
++            .rect = {.x = 0.62f, .y = 0.58f, .w = 0.12f, .h = 0.16f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
-+            .action = kBarrelPadActionR,
-+            .label = "R",
-+            .rect = {.x = 0.78f, .y = 0.30f, .w = 0.12f, .h = 0.14f},
++            .action = kBarrelPadActionZ,
++            .label = "Z",
++            .rect = {.x = 0.76f, .y = 0.40f, .w = 0.12f, .h = 0.14f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionCUp,
 +            .label = "C↑",
-+            .rect = {.x = 0.70f, .y = 0.14f, .w = 0.07f, .h = 0.09f},
++            .rect = {.x = 0.78f, .y = 0.18f, .w = 0.07f, .h = 0.09f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionCDown,
 +            .label = "C↓",
-+            .rect = {.x = 0.70f, .y = 0.28f, .w = 0.07f, .h = 0.09f},
++            .rect = {.x = 0.78f, .y = 0.32f, .w = 0.07f, .h = 0.09f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionCLeft,
 +            .label = "C←",
-+            .rect = {.x = 0.62f, .y = 0.21f, .w = 0.07f, .h = 0.09f},
++            .rect = {.x = 0.70f, .y = 0.25f, .w = 0.07f, .h = 0.09f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionCRight,
 +            .label = "C→",
-+            .rect = {.x = 0.78f, .y = 0.21f, .w = 0.07f, .h = 0.09f},
++            .rect = {.x = 0.86f, .y = 0.25f, .w = 0.07f, .h = 0.09f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionStart,
 +            .label = "Start",
-+            .rect = {.x = 0.86f, .y = 0.06f, .w = 0.10f, .h = 0.08f},
++            .rect = {.x = 0.88f, .y = 0.08f, .w = 0.08f, .h = 0.09f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionMenu,
 +            .label = "•••",
-+            .rect = {.x = 0.86f, .y = 0.00f, .w = 0.10f, .h = 0.06f},
++            .rect = {.x = 0.88f, .y = 0.00f, .w = 0.08f, .h = 0.07f},
 +        };
 +    } else {
-+        /* Tablet: more margin, slightly larger C cluster. */
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionA,
 +            .label = "A",
-+            .rect = {.x = 0.78f, .y = 0.50f, .w = 0.12f, .h = 0.20f},
++            .rect = {.x = 0.80f, .y = 0.52f, .w = 0.12f, .h = 0.18f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionB,
 +            .label = "B",
-+            .rect = {.x = 0.66f, .y = 0.56f, .w = 0.10f, .h = 0.16f},
++            .rect = {.x = 0.68f, .y = 0.48f, .w = 0.10f, .h = 0.14f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
-+            .action = kBarrelPadActionR,
-+            .label = "R",
-+            .rect = {.x = 0.82f, .y = 0.28f, .w = 0.10f, .h = 0.12f},
++            .action = kBarrelPadActionZ,
++            .label = "Z",
++            .rect = {.x = 0.80f, .y = 0.32f, .w = 0.10f, .h = 0.12f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionCUp,
 +            .label = "C↑",
-+            .rect = {.x = 0.74f, .y = 0.16f, .w = 0.06f, .h = 0.08f},
++            .rect = {.x = 0.80f, .y = 0.72f, .w = 0.06f, .h = 0.08f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionCDown,
 +            .label = "C↓",
-+            .rect = {.x = 0.74f, .y = 0.28f, .w = 0.06f, .h = 0.08f},
++            .rect = {.x = 0.80f, .y = 0.84f, .w = 0.06f, .h = 0.08f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionCLeft,
 +            .label = "C←",
-+            .rect = {.x = 0.67f, .y = 0.22f, .w = 0.06f, .h = 0.08f},
++            .rect = {.x = 0.73f, .y = 0.78f, .w = 0.06f, .h = 0.08f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionCRight,
 +            .label = "C→",
-+            .rect = {.x = 0.81f, .y = 0.22f, .w = 0.06f, .h = 0.08f},
++            .rect = {.x = 0.87f, .y = 0.78f, .w = 0.06f, .h = 0.08f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionStart,
 +            .label = "Start",
-+            .rect = {.x = 0.88f, .y = 0.08f, .w = 0.08f, .h = 0.07f},
++            .rect = {.x = 0.80f, .y = 0.18f, .w = 0.08f, .h = 0.08f},
 +        };
 +        dst[n++] = (BarrelPadControlSpec){
 +            .action = kBarrelPadActionMenu,
 +            .label = "•••",
-+            .rect = {.x = 0.88f, .y = 0.01f, .w = 0.08f, .h = 0.06f},
++            .rect = {.x = 0.90f, .y = 0.02f, .w = 0.07f, .h = 0.06f},
 +        };
-+        /* Enlarge stick well slightly on tablet. */
-+        dst[0].rect = (BarrelPadLayoutRect){.x = 0.05f, .y = 0.40f, .w = 0.20f, .h = 0.40f};
-+        dst[1].rect = (BarrelPadLayoutRect){.x = 0.05f, .y = 0.20f, .w = 0.08f, .h = 0.10f};
-+        dst[2].rect = (BarrelPadLayoutRect){.x = 0.15f, .y = 0.20f, .w = 0.08f, .h = 0.10f};
++        dst[0].rect = (BarrelPadLayoutRect){.x = 0.05f, .y = 0.48f, .w = 0.20f, .h = 0.38f};
 +    }
 +
 +    int count = n < maxSpecs ? n : maxSpecs;
@@ -707,10 +708,10 @@ index 0000000..4d3bfdb
 +}
 diff --git a/platform/barrelpad/BarrelPadInput.h b/platform/barrelpad/BarrelPadInput.h
 new file mode 100644
-index 0000000..65ddea8
+index 0000000..86323ec
 --- /dev/null
 +++ b/platform/barrelpad/BarrelPadInput.h
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,115 @@
 +#pragma once
 +
 +#include <stdbool.h>
@@ -744,6 +745,11 @@ index 0000000..65ddea8
 +    kBarrelPadLayoutPhone = 0,
 +    kBarrelPadLayoutTablet = 1
 +} BarrelPadLayoutKind;
++
++/* Gameplay controls follow the saved preference, but a physical controller
++ * temporarily takes over Player 1 without changing that preference. */
++bool BarrelPad_GameplayTouchEnabled(bool preferenceEnabled,
++                                    bool physicalControllerConnected);
 +
 +/* Normalized layout rect in landscape UI coordinates: origin top-left,
 + * x/y in [0,1], width/height relative to short/long edges of the safe area. */
@@ -823,7 +829,7 @@ index 0000000..65ddea8
 +#endif
 diff --git a/platform/barrelpad/BarrelPadRomBoot.h b/platform/barrelpad/BarrelPadRomBoot.h
 new file mode 100644
-index 0000000..29b14ad
+index 0000000..02caf36
 --- /dev/null
 +++ b/platform/barrelpad/BarrelPadRomBoot.h
 @@ -0,0 +1,19 @@
@@ -848,10 +854,10 @@ index 0000000..29b14ad
 +#endif
 diff --git a/platform/barrelpad/BarrelPadRomBoot.mm b/platform/barrelpad/BarrelPadRomBoot.mm
 new file mode 100644
-index 0000000..a3fb125
+index 0000000..33d5bc3
 --- /dev/null
 +++ b/platform/barrelpad/BarrelPadRomBoot.mm
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,168 @@
 +#include "BarrelPadRomBoot.h"
 +
 +#import <Foundation/Foundation.h>
@@ -897,8 +903,79 @@ index 0000000..a3fb125
 +    return nil;
 +}
 +
++/*
++ * CoreDevice treats a single-file copy whose destination is "Documents" as
++ * a replacement for the directory rather than a copy into it. Repair that
++ * malformed state once, keeping the transferred ROM and restoring the normal
++ * Files-visible Documents directory before the engine resolves its paths.
++ */
++static NSString *prepareDocumentsDirectory(void) {
++    NSArray<NSString *> *docs = NSSearchPathForDirectoriesInDomains(
++        NSDocumentDirectory, NSUserDomainMask, YES);
++    if (docs.count == 0) {
++        return nil;
++    }
++
++    NSString *docsPath = docs.firstObject;
++    NSFileManager *fm = NSFileManager.defaultManager;
++    BOOL isDirectory = NO;
++    if (![fm fileExistsAtPath:docsPath isDirectory:&isDirectory] || isDirectory) {
++        return docsPath;
++    }
++
++    NSString *holdingPath = [docsPath stringByAppendingString:@".barrelpad-recovery"];
++    NSError *error = nil;
++    if ([fm fileExistsAtPath:holdingPath] ||
++        ![fm moveItemAtPath:docsPath toPath:holdingPath error:&error]) {
++        fprintf(stderr, "[BarrelPad] could not recover malformed Documents path: %s\n",
++                error.localizedDescription.UTF8String);
++        return nil;
++    }
++    if (![fm createDirectoryAtPath:docsPath
++       withIntermediateDirectories:NO attributes:nil error:&error]) {
++        fprintf(stderr, "[BarrelPad] could not recreate Documents: %s\n",
++                error.localizedDescription.UTF8String);
++        [fm moveItemAtPath:holdingPath toPath:docsPath error:nil];
++        return nil;
++    }
++
++    NSString *romPath = [docsPath stringByAppendingPathComponent:@"diddy-kong-racing.v64"];
++    if ([fm fileExistsAtPath:romPath]) {
++        romPath = [docsPath stringByAppendingPathComponent:@"diddy-kong-racing-recovered.v64"];
++    }
++    if (![fm moveItemAtPath:holdingPath toPath:romPath error:&error]) {
++        fprintf(stderr, "[BarrelPad] Documents recovered but ROM is held at %s: %s\n",
++                holdingPath.UTF8String, error.localizedDescription.UTF8String);
++        return docsPath;
++    }
++    fprintf(stderr, "[BarrelPad] recovered ROM into Documents: %s\n", romPath.UTF8String);
++    return docsPath;
++}
++
 +int BarrelPad_PrepareIosRomBoot(void) {
 +    sResolvedRom[0] = '\0';
++
++    /* A UIKit game has no useful windowed mode. Resolve the host window before
++     * AppHost creates SDL so the Metal drawable uses the complete iPhone/iPad
++     * landscape surface. Keep the game's native Hor+ presentation enabled. */
++    setenv("MDKR_WINDOW_MODE", "fullscreen", 1);
++    setenv("MDKR_WIDESCREEN", "1", 1);
++    setenv("MDKR_ASPECT", "auto", 1);
++
++    /* Point every writable engine/launcher path at the app's own Documents so
++     * settings, video config, and saves work inside the sandbox. SDL_GetPrefPath
++     * cannot resolve on iOS (no $HOME), and the engine's packaged-path marker is
++     * macOS-only (.app/Contents/MacOS/), so without these the device falls back
++     * to CWD=/, which is not writable ("settings file is not writable"). */
++    NSString *docsPath = prepareDocumentsDirectory();
++    if (docsPath != nil) {
++        setenv("MDKR_APP_PREFS_DIR", docsPath.UTF8String, 1);
++        setenv("MDKR_VIDEO_CONFIG_PATH",
++               [docsPath stringByAppendingPathComponent:@"mdkr64.ini"].UTF8String, 1);
++        setenv("MDKR_SAVE_DIR",
++               [docsPath stringByAppendingPathComponent:@"save"].UTF8String, 1);
++        fprintf(stderr, "[BarrelPad] writable dirs -> %s\n", docsPath.UTF8String);
++    }
 +
 +    const char *existing = getenv("MDKR_ROM");
 +    if (existing != NULL && existing[0] != '\0') {
@@ -913,17 +990,15 @@ index 0000000..a3fb125
 +        return 1;
 +    }
 +
-+    NSArray<NSString *> *docs = NSSearchPathForDirectoriesInDomains(
-+        NSDocumentDirectory, NSUserDomainMask, YES);
-+    if (docs.count == 0) {
++    if (docsPath == nil) {
 +        fprintf(stderr, "[BarrelPad] Documents directory unavailable\n");
 +        return 0;
 +    }
-+    NSString *picked = pickRomInDirectory(docs.firstObject);
++    NSString *picked = pickRomInDirectory(docsPath);
 +    if (picked == nil) {
 +        /* Also check a nested ROMs folder if present. */
 +        NSString *nested =
-+            [docs.firstObject stringByAppendingPathComponent:@"ROMs"];
++            [docsPath stringByAppendingPathComponent:@"ROMs"];
 +        picked = pickRomInDirectory(nested);
 +    }
 +    if (picked == nil) {
@@ -953,12 +1028,12 @@ index 0000000..a3fb125
 +#endif
 diff --git a/platform/barrelpad/BarrelPadShell.mm b/platform/barrelpad/BarrelPadShell.mm
 new file mode 100644
-index 0000000..c727b7e
+index 0000000..028442c
 --- /dev/null
 +++ b/platform/barrelpad/BarrelPadShell.mm
-@@ -0,0 +1,719 @@
+@@ -0,0 +1,1364 @@
 +/*
-+ * BarrelPad iOS/iPadOS shell: touch overlay + virtual controller emission.
++ * BarrelPad iOS/iPadOS shell: touch overlay + direct P1 input emission.
 + * Patterns adapted from SpaghettiPad; mappings tuned for Diddy Kong Racing
 + * (Golden Balloon host keyboard/gamepad map).
 + */
@@ -970,21 +1045,36 @@ index 0000000..c727b7e
 +#include <cmath>
 +#include <cstdarg>
 +#include <cstdio>
++#include <cstdlib>
 +
 +#include <SDL.h>
 +#include <SDL_syswm.h>
 +
++#include "app/app_config.h"
 +#include "BarrelPadTouchControls.h"
 +#include "BarrelPadInput.h"
++#include "platform_os.h"
++#include "controller_mapping.h"
 +
 +static UIWindow *sSDLWindow;
-+static SDL_Joystick *sVirtualJoystick;
-+static int sVirtualDeviceIndex = -1;
 +static std::array<int, kBarrelPadActionCount> sActionPressCounts = {};
++static unsigned int sHeldButtons = 0;
++static int sStickX = 0;
++static int sStickY = 0;
 +static std::atomic_bool sMenuVisible(false);
 +static std::atomic_bool sTouchStickActive(false);
 +static std::atomic_bool sGameplayActive(true);
-+static BOOL sTouchControlsDesired = YES;
++static std::atomic_bool sPhysicalControllerConnected(false);
++static std::atomic_bool sTouchControlsDesired(true);
++static BOOL sLayoutEditorActive = NO;
++/* Persistent player-facing touch overlay scale (0.5x-2.0x). Main-thread only;
++ * written by platform_ios_touch_set_scale and read during layout. */
++static float sTouchControlScale = 1.0f;
++
++static BOOL BarrelPad_TouchControlsEffective(void) {
++    return BarrelPad_GameplayTouchEnabled(
++        sTouchControlsDesired.load(), sPhysicalControllerConnected.load());
++}
 +
 +void BarrelPad_Log(const char *fmt, ...) {
 +    char buf[1024];
@@ -1049,63 +1139,61 @@ index 0000000..c727b7e
 +    }
 +}
 +
-+static SDL_GameControllerButton BarrelPad_ActionButton(BarrelPadAction action) {
++static unsigned int BarrelPad_ActionN64Bit(BarrelPadAction action) {
 +    switch (action) {
-+        case kBarrelPadActionA:
-+            return SDL_CONTROLLER_BUTTON_A;
-+        case kBarrelPadActionB:
-+            return SDL_CONTROLLER_BUTTON_B;
-+        case kBarrelPadActionL:
-+            return SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
-+        case kBarrelPadActionR:
-+            return SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
-+        case kBarrelPadActionStart:
-+            return SDL_CONTROLLER_BUTTON_START;
-+        case kBarrelPadActionDUp:
-+            return SDL_CONTROLLER_BUTTON_DPAD_UP;
-+        case kBarrelPadActionDDown:
-+            return SDL_CONTROLLER_BUTTON_DPAD_DOWN;
-+        case kBarrelPadActionDLeft:
-+            return SDL_CONTROLLER_BUTTON_DPAD_LEFT;
-+        case kBarrelPadActionDRight:
-+            return SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
-+        case kBarrelPadActionCDown:
-+            return SDL_CONTROLLER_BUTTON_X;
-+        case kBarrelPadActionCLeft:
-+            return SDL_CONTROLLER_BUTTON_Y;
-+        default:
-+            return SDL_CONTROLLER_BUTTON_INVALID;
++        case kBarrelPadActionA: return MDKR_N64_A;
++        case kBarrelPadActionB: return MDKR_N64_B;
++        case kBarrelPadActionL: return MDKR_N64_L;
++        case kBarrelPadActionR: return MDKR_N64_R;
++        case kBarrelPadActionZ: return MDKR_N64_Z;
++        case kBarrelPadActionStart: return MDKR_N64_START;
++        case kBarrelPadActionDUp: return MDKR_N64_DU;
++        case kBarrelPadActionDDown: return MDKR_N64_DD;
++        case kBarrelPadActionDLeft: return MDKR_N64_DL;
++        case kBarrelPadActionDRight: return MDKR_N64_DR;
++        case kBarrelPadActionCUp: return MDKR_N64_CU;
++        case kBarrelPadActionCDown: return MDKR_N64_CD;
++        case kBarrelPadActionCLeft: return MDKR_N64_CL;
++        case kBarrelPadActionCRight: return MDKR_N64_CR;
++        default: return 0;
++    }
++}
++
++static void BarrelPad_PublishPad(void) {
++    /* Direct P1 merge leaves SDL Player 1 free for a physical controller. */
++    static unsigned int sLastLoggedButtons = 0xFFFFFFFFu;
++    platform_ios_touch_set(sHeldButtons, sStickX, sStickY,
++                           BarrelPad_TouchControlsEffective() ? 1 : 0);
++    if (sLastLoggedButtons != sHeldButtons) {
++        BarrelPad_Log("pad inject buttons=0x%04x stick=%d,%d", sHeldButtons,
++                     sStickX, sStickY);
++        sLastLoggedButtons = sHeldButtons;
 +    }
 +}
 +
 +static void BarrelPad_EmitAction(BarrelPadAction action, BOOL pressed) {
 +    BarrelPad_Log("touch action=%s pressed=%d", BarrelPad_ActionLabel(action),
 +                 pressed ? 1 : 0);
-+    if (action != kBarrelPadActionMenu && sVirtualJoystick != nullptr) {
-+        if (action == kBarrelPadActionZ) {
-+            SDL_JoystickSetVirtualAxis(
-+                sVirtualJoystick, SDL_CONTROLLER_AXIS_TRIGGERLEFT,
-+                pressed ? SDL_JOYSTICK_AXIS_MAX : SDL_JOYSTICK_AXIS_MIN);
-+            return;
++    if (action == kBarrelPadActionMenu) {
++        /* Escape opens the host ImGui overlay and swallows game pad input while
++         * open. Still emit it so Settings remains reachable. */
++        SDL_Scancode scancode = BarrelPad_ActionScancode(action);
++        if (scancode != SDL_SCANCODE_UNKNOWN) {
++            BarrelPad_PushKey(scancode, pressed);
 +        }
-+        Sint16 axisValue = pressed ? SDL_JOYSTICK_AXIS_MAX : 0;
-+        if (action == kBarrelPadActionCUp) {
-+            SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTY,
-+                                       (Sint16)(-axisValue));
-+            return;
-+        }
-+        if (action == kBarrelPadActionCRight) {
-+            SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTX,
-+                                       axisValue);
-+            return;
-+        }
-+        SDL_GameControllerButton button = BarrelPad_ActionButton(action);
-+        if (button != SDL_CONTROLLER_BUTTON_INVALID) {
-+            SDL_JoystickSetVirtualButton(sVirtualJoystick, button,
-+                                         pressed ? SDL_PRESSED : SDL_RELEASED);
-+            return;
-+        }
++        BarrelPad_Log("menu key (host overlay) pressed=%d", pressed ? 1 : 0);
++        return;
 +    }
++    unsigned int bit = BarrelPad_ActionN64Bit(action);
++    if (bit != 0) {
++        if (pressed) {
++            sHeldButtons |= bit;
++        } else {
++            sHeldButtons &= ~bit;
++        }
++        BarrelPad_PublishPad();
++    }
++    /* Also synthesize keyboard for any host path that still reads keys. */
 +    SDL_Scancode scancode = BarrelPad_ActionScancode(action);
 +    if (scancode != SDL_SCANCODE_UNKNOWN) {
 +        BarrelPad_PushKey(scancode, pressed);
@@ -1127,35 +1215,18 @@ index 0000000..c727b7e
 +}
 +
 +static void BarrelPad_SetStickAxes(Sint16 x, Sint16 y) {
-+    if (sVirtualJoystick != nullptr) {
-+        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTX, x);
-+        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTY, y);
-+        return;
-+    }
-+    /* Keyboard fallback for stick via host WASD/arrows. */
-+    const Sint16 thr = SDL_JOYSTICK_AXIS_MAX / 3;
-+    BarrelPad_PushKey(SDL_SCANCODE_LEFT, x < -thr);
-+    BarrelPad_PushKey(SDL_SCANCODE_RIGHT, x > thr);
-+    BarrelPad_PushKey(SDL_SCANCODE_UP, y < -thr);
-+    BarrelPad_PushKey(SDL_SCANCODE_DOWN, y > thr);
-+}
-+
-+static void BarrelPad_AttachVirtualController(void) {
-+    if (sVirtualJoystick != nullptr) {
-+        return;
-+    }
-+    sVirtualDeviceIndex = SDL_JoystickAttachVirtual(
-+        SDL_JOYSTICK_TYPE_GAMECONTROLLER, 6, 16, 0);
-+    if (sVirtualDeviceIndex < 0) {
-+        BarrelPad_Log("virtual joystick attach failed: %s", SDL_GetError());
-+        return;
-+    }
-+    sVirtualJoystick = SDL_JoystickOpen(sVirtualDeviceIndex);
-+    if (sVirtualJoystick == nullptr) {
-+        BarrelPad_Log("virtual joystick open failed: %s", SDL_GetError());
-+        return;
-+    }
-+    BarrelPad_Log("virtual controller attached index=%d", sVirtualDeviceIndex);
++    /* Convert SDL-style axes (±32767, +y down) to N64 ±80, +y up. */
++    int sx = (int)x * 80 / 32767;
++    int sy = -(int)y * 80 / 32767;
++    if (sx < -80) sx = -80;
++    if (sx > 80) sx = 80;
++    if (sy < -80) sy = -80;
++    if (sy > 80) sy = 80;
++    if (sx > -8 && sx < 8) sx = 0;
++    if (sy > -8 && sy < 8) sy = 0;
++    sStickX = sx;
++    sStickY = sy;
++    BarrelPad_PublishPad();
 +}
 +
 +static void BarrelPad_ResetAllInputs(void) {
@@ -1165,7 +1236,11 @@ index 0000000..c727b7e
 +            BarrelPad_EmitAction((BarrelPadAction)a, NO);
 +        }
 +    }
-+    BarrelPad_SetStickAxes(0, 0);
++    sHeldButtons = 0;
++    sStickX = 0;
++    sStickY = 0;
++    platform_ios_touch_set(0, 0, 0,
++                           BarrelPad_TouchControlsEffective() ? 1 : 0);
 +    sTouchStickActive.store(false);
 +}
 +
@@ -1175,33 +1250,40 @@ index 0000000..c727b7e
 +@property(nonatomic) BOOL outputPressed;
 +@property(nonatomic) BOOL holdAssistEnabled;
 +@property(nonatomic) BOOL holdLocked;
++@property(nonatomic) BOOL usesPillShape;
 +@property(nonatomic) CFTimeInterval inputDownTime;
 +@property(nonatomic) NSUInteger releaseGeneration;
 +@property(nonatomic, copy) NSString *normalLabel;
 +@property(nonatomic, strong) UIColor *idleColor;
 +@property(nonatomic, strong) UIColor *pressedColor;
-+- (instancetype)initWithLabel:(NSString *)label action:(BarrelPadAction)action;
++- (instancetype)initWithLabel:(NSString *)label
++                       action:(BarrelPadAction)action
++                         pill:(BOOL)pill;
 +- (void)applyIdleColor:(UIColor *)idle pressedColor:(UIColor *)pressed;
 +- (void)cancelInput;
 +@end
 +
 +@implementation BarrelPadTouchButton
-+- (instancetype)initWithLabel:(NSString *)label action:(BarrelPadAction)action {
++- (instancetype)initWithLabel:(NSString *)label
++                       action:(BarrelPadAction)action
++                         pill:(BOOL)pill {
 +    self = [super initWithFrame:CGRectZero];
 +    if (self) {
 +        self.action = action;
 +        self.normalLabel = label;
++        self.usesPillShape = pill;
 +        self.multipleTouchEnabled = YES;
-+        self.idleColor = [UIColor colorWithWhite:0.08 alpha:0.62];
-+        self.pressedColor = [UIColor colorWithWhite:0.85 alpha:0.78];
++        /* SpaghettiPad glass: light tint so the game stays readable. */
++        self.idleColor = [UIColor colorWithWhite:0.04 alpha:0.38];
++        self.pressedColor = [UIColor colorWithWhite:0.72 alpha:0.48];
 +        self.backgroundColor = self.idleColor;
-+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.78].CGColor;
++        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.58].CGColor;
 +        self.layer.borderWidth = 2.0;
 +        [self setTitle:label forState:UIControlStateNormal];
 +        [self setTitleColor:[UIColor colorWithWhite:1.0 alpha:0.92]
 +                   forState:UIControlStateNormal];
 +        self.titleLabel.font =
-+            [UIFont systemFontOfSize:17.0 weight:UIFontWeightSemibold];
++            [UIFont systemFontOfSize:18.0 weight:UIFontWeightSemibold];
 +        self.accessibilityLabel = label;
 +        [self addTarget:self
 +                      action:@selector(inputDown)
@@ -1216,11 +1298,16 @@ index 0000000..c727b7e
 +
 +- (void)layoutSubviews {
 +    [super layoutSubviews];
-+    CGFloat m = MIN(CGRectGetWidth(self.bounds), CGRectGetHeight(self.bounds));
-+    self.layer.cornerRadius = m * 0.5;
++    self.layer.cornerRadius =
++        self.usesPillShape ? CGRectGetHeight(self.bounds) * 0.48
++                           : MIN(CGRectGetWidth(self.bounds), CGRectGetHeight(self.bounds)) *
++                                 0.5;
 +}
 +
 +- (void)inputDown {
++    if (sLayoutEditorActive) {
++        return;
++    }
 +    self.releaseGeneration += 1;
 +    if (self.inputPressed) {
 +        return;
@@ -1252,13 +1339,36 @@ index 0000000..c727b7e
 +    }
 +}
 +
-+- (void)inputUp {
++- (void)finishInputRelease {
 +    if (!self.inputPressed) {
 +        return;
 +    }
 +    self.inputPressed = NO;
 +    [self updateOutput];
 +    [self updateAppearance];
++}
++
++- (void)inputUp {
++    if (!self.inputPressed) {
++        return;
++    }
++    /* SpaghettiPad: guarantee a minimum press window so short taps register. */
++    if (self.action != kBarrelPadActionMenu) {
++        CFTimeInterval remaining =
++            MAX(0.0, 0.05 - (CACurrentMediaTime() - self.inputDownTime));
++        if (remaining > 0.0) {
++            NSUInteger generation = ++self.releaseGeneration;
++            dispatch_after(
++                dispatch_time(DISPATCH_TIME_NOW, (int64_t)(remaining * NSEC_PER_SEC)),
++                dispatch_get_main_queue(), ^{
++                    if (self.releaseGeneration == generation) {
++                        [self finishInputRelease];
++                    }
++                });
++            return;
++        }
++    }
++    [self finishInputRelease];
 +}
 +
 +- (void)updateOutput {
@@ -1277,18 +1387,20 @@ index 0000000..c727b7e
 +        [self setTitle:@"A •" forState:UIControlStateNormal];
 +        self.layer.borderColor =
 +            [UIColor colorWithRed:0.42 green:0.88 blue:1.0 alpha:0.95].CGColor;
-+        self.layer.borderWidth = 3.0;
++        self.layer.borderWidth = 4.0;
++        self.accessibilityValue = @"Acceleration locked";
 +    } else {
 +        [self setTitle:self.normalLabel forState:UIControlStateNormal];
-+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.78].CGColor;
++        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.58].CGColor;
 +        self.layer.borderWidth = 2.0;
++        self.accessibilityValue = nil;
 +    }
 +}
 +
 +- (void)applyIdleColor:(UIColor *)idle pressedColor:(UIColor *)pressed {
 +    self.idleColor = idle;
 +    self.pressedColor = pressed;
-+    self.backgroundColor = idle;
++    [self updateAppearance];
 +}
 +
 +- (void)cancelInput {
@@ -1310,7 +1422,7 @@ index 0000000..c727b7e
 +    self = [super initWithFrame:frame];
 +    if (self) {
 +        self.multipleTouchEnabled = NO;
-+        self.backgroundColor = [UIColor colorWithWhite:0.10 alpha:0.55];
++        self.backgroundColor = [UIColor colorWithWhite:0.04 alpha:0.30];
 +        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.42].CGColor;
 +        self.layer.borderWidth = 2.0;
 +        self.accessibilityLabel = @"Steering";
@@ -1323,6 +1435,12 @@ index 0000000..c727b7e
 +        [self addSubview:self.knob];
 +    }
 +    return self;
++}
++
++- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
++    /* Expand grab area slightly beyond the drawn ring (SpaghettiPad feel). */
++    CGRect expanded = CGRectInset(self.bounds, -18.0, -18.0);
++    return CGRectContainsPoint(expanded, point);
 +}
 +
 +- (void)layoutSubviews {
@@ -1350,14 +1468,17 @@ index 0000000..c727b7e
 +        dy = dy / distance * radius;
 +    }
 +    self.knob.center = CGPointMake(center.x + dx, center.y + dy);
-+    BarrelPadStickState st = BarrelPad_StickFromTouch(dx, dy, (float)radius);
-+    Sint16 x = (Sint16)lround(st.x * SDL_JOYSTICK_AXIS_MAX);
-+    /* BarrelPad_StickFromTouch already uses +up N64; SDL left-stick +y is down. */
-+    Sint16 y = (Sint16)lround(-st.y * SDL_JOYSTICK_AXIS_MAX);
++    Sint16 x = (Sint16)lround(
++        MAX(-1.0, MIN(1.0, (double)(dx / radius))) * SDL_JOYSTICK_AXIS_MAX);
++    Sint16 y = (Sint16)lround(
++        MAX(-1.0, MIN(1.0, (double)(dy / radius))) * SDL_JOYSTICK_AXIS_MAX);
 +    BarrelPad_SetStickAxes(x, y);
 +}
 +
 +- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
++    if (sLayoutEditorActive) {
++        return;
++    }
 +    UITouch *touch = touches.anyObject;
 +    if (!touch) {
 +        return;
@@ -1381,7 +1502,9 @@ index 0000000..c727b7e
 +}
 +
 +- (void)cancelInput {
-+    BarrelPad_SetStickAxes(0, 0);
++    sStickX = 0;
++    sStickY = 0;
++    BarrelPad_PublishPad();
 +    sTouchStickActive.store(false);
 +    self.knob.center =
 +        CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
@@ -1392,13 +1515,46 @@ index 0000000..c727b7e
 +    return CGRectMake(center.x - w * 0.5, center.y - h * 0.5, w, h);
 +}
 +
++static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
++    return CGRectMake(CGRectGetWidth(bounds) - safe.right - size - 8.0,
++                      safe.top + 4.0, size, size);
++}
++
++static NSDictionary<NSString *, NSArray<NSNumber *> *> *
++BarrelPad_DefaultPhoneCenters(void) {
++    static NSDictionary<NSString *, NSArray<NSNumber *> *> *centers;
++    static dispatch_once_t onceToken;
++    dispatch_once(&onceToken, ^{
++      /* Accepted on an iPhone 14 in landscape. Normalized centers keep the
++       * same thumb-reach layout across supported phone screen sizes. */
++      centers = @{
++          @"a" : @[ @0.8755924170616114, @0.8051282051282052 ],
++          @"b" : @[ @0.8084518167456555, @0.7529914529914529 ],
++          @"c-down" : @[ @0.8815165876777250, @0.4350427350427350 ],
++          @"c-left" : @[ @0.8467614533965245, @0.3555555555555555 ],
++          @"c-right" : @[ @0.9170616113744076, @0.3555555555555555 ],
++          @"c-up" : @[ @0.8838862559241706, @0.2692307692307693 ],
++          @"l" : @[ @0.09794628751974722, @0.5777777777777777 ],
++          @"r" : @[ @0.9079778830963665, @0.6786324786324788 ],
++          @"start" : @[ @0.8416271721958924, @0.07777777777777758 ],
++          @"stick" : @[ @0.1595576619273302, @0.7948717948717948 ],
++          @"z-left" : @[ @0.1563981042654028, @0.5786324786324787 ],
++          @"z-right" : @[ @0.8507109004739336, @0.6487179487179486 ],
++      };
++    });
++    return centers;
++}
++
++static void BarrelPad_RestoreTouchInputAfterEditing(void);
++
 +@interface BarrelPadTouchOverlay : UIView
 +@property(nonatomic, strong) BarrelPadTouchStick *stick;
 +@property(nonatomic, strong) NSArray<BarrelPadTouchButton *> *buttons;
 +@property(nonatomic, strong) BarrelPadTouchButton *buttonA;
 +@property(nonatomic, strong) BarrelPadTouchButton *buttonB;
 +@property(nonatomic, strong) BarrelPadTouchButton *buttonL;
-+@property(nonatomic, strong) BarrelPadTouchButton *buttonZ;
++@property(nonatomic, strong) BarrelPadTouchButton *buttonZLeft;
++@property(nonatomic, strong) BarrelPadTouchButton *buttonZRight;
 +@property(nonatomic, strong) BarrelPadTouchButton *buttonR;
 +@property(nonatomic, strong) BarrelPadTouchButton *buttonStart;
 +@property(nonatomic, strong) BarrelPadTouchButton *cUp;
@@ -1406,7 +1562,20 @@ index 0000000..c727b7e
 +@property(nonatomic, strong) BarrelPadTouchButton *cLeft;
 +@property(nonatomic, strong) BarrelPadTouchButton *cRight;
 +@property(nonatomic, strong) BarrelPadTouchButton *menuButton;
++@property(nonatomic, strong) NSArray<UIView *> *editableControls;
++@property(nonatomic, strong) NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *layoutCenters;
++@property(nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *layoutScales;
++@property(nonatomic, strong) NSMutableDictionary<NSString *, NSValue *> *defaultSizes;
++@property(nonatomic, copy) NSString *layoutProfile;
++@property(nonatomic) BOOL layoutEditing;
++@property(nonatomic, assign) UIView *selectedControl;
++@property(nonatomic, strong) UIView *editorPanel;
++@property(nonatomic, strong) UILabel *editorLabel;
++@property(nonatomic, strong) UISlider *sizeSlider;
++@property(nonatomic, strong) UIButton *resetButton;
++@property(nonatomic, strong) UIButton *doneButton;
 +- (void)cancelAllInputs;
++- (void)beginLayoutEditing;
 +@end
 +
 +@implementation BarrelPadTouchOverlay
@@ -1417,31 +1586,46 @@ index 0000000..c727b7e
 +        self.multipleTouchEnabled = YES;
 +        self.stick = [[BarrelPadTouchStick alloc] initWithFrame:CGRectZero];
 +        self.buttonA = [[BarrelPadTouchButton alloc] initWithLabel:@"A"
-+                                                           action:kBarrelPadActionA];
++                                                           action:kBarrelPadActionA
++                                                             pill:NO];
 +        self.buttonA.holdAssistEnabled = YES;
 +        self.buttonB = [[BarrelPadTouchButton alloc] initWithLabel:@"B"
-+                                                           action:kBarrelPadActionB];
++                                                           action:kBarrelPadActionB
++                                                             pill:NO];
 +        self.buttonL = [[BarrelPadTouchButton alloc] initWithLabel:@"L"
-+                                                           action:kBarrelPadActionL];
-+        self.buttonZ = [[BarrelPadTouchButton alloc] initWithLabel:@"Z"
-+                                                           action:kBarrelPadActionZ];
++                                                           action:kBarrelPadActionL
++                                                             pill:NO];
++        /* Dual Z like SpaghettiPad: left thumb (item near stick) + right face. */
++        self.buttonZLeft = [[BarrelPadTouchButton alloc] initWithLabel:@"Z"
++                                                               action:kBarrelPadActionZ
++                                                                 pill:NO];
++        self.buttonZRight = [[BarrelPadTouchButton alloc] initWithLabel:@"Z"
++                                                                action:kBarrelPadActionZ
++                                                                  pill:NO];
 +        self.buttonR = [[BarrelPadTouchButton alloc] initWithLabel:@"R"
-+                                                           action:kBarrelPadActionR];
++                                                           action:kBarrelPadActionR
++                                                             pill:NO];
 +        self.buttonStart = [[BarrelPadTouchButton alloc] initWithLabel:@"▶"
-+                                                               action:kBarrelPadActionStart];
++                                                               action:kBarrelPadActionStart
++                                                                 pill:NO];
 +        self.cUp = [[BarrelPadTouchButton alloc] initWithLabel:@"▲"
-+                                                       action:kBarrelPadActionCUp];
++                                                       action:kBarrelPadActionCUp
++                                                         pill:NO];
 +        self.cDown = [[BarrelPadTouchButton alloc] initWithLabel:@"▼"
-+                                                         action:kBarrelPadActionCDown];
++                                                         action:kBarrelPadActionCDown
++                                                           pill:NO];
 +        self.cLeft = [[BarrelPadTouchButton alloc] initWithLabel:@"◀"
-+                                                         action:kBarrelPadActionCLeft];
++                                                         action:kBarrelPadActionCLeft
++                                                           pill:NO];
 +        self.cRight = [[BarrelPadTouchButton alloc] initWithLabel:@"▶"
-+                                                          action:kBarrelPadActionCRight];
++                                                          action:kBarrelPadActionCRight
++                                                            pill:NO];
 +        self.menuButton = [[BarrelPadTouchButton alloc] initWithLabel:@"•••"
-+                                                              action:kBarrelPadActionMenu];
++                                                              action:kBarrelPadActionMenu
++                                                                pill:YES];
 +
 +        [self.buttonA
-+            applyIdleColor:[UIColor colorWithRed:0.08 green:0.35 blue:0.88 alpha:0.78]
++            applyIdleColor:[UIColor colorWithRed:0.08 green:0.35 blue:0.88 alpha:0.58]
 +              pressedColor:[UIColor colorWithRed:0.14 green:0.48 blue:1.00 alpha:0.88]];
 +        [self.buttonB
 +            applyIdleColor:[UIColor colorWithRed:0.05 green:0.55 blue:0.24 alpha:0.58]
@@ -1449,30 +1633,117 @@ index 0000000..c727b7e
 +        [self.buttonStart
 +            applyIdleColor:[UIColor colorWithRed:0.68 green:0.12 blue:0.16 alpha:0.52]
 +              pressedColor:[UIColor colorWithRed:0.94 green:0.22 blue:0.26 alpha:0.88]];
-+        UIColor *cIdle = [UIColor colorWithRed:0.95 green:0.67 blue:0.12 alpha:0.72];
++        UIColor *cIdle = [UIColor colorWithRed:0.95 green:0.67 blue:0.12 alpha:0.48];
 +        UIColor *cPressed = [UIColor colorWithRed:1.00 green:0.78 blue:0.20 alpha:0.86];
 +        for (BarrelPadTouchButton *b in @[ self.cUp, self.cDown, self.cLeft, self.cRight ]) {
-+            b.idleColor = cIdle;
-+            b.pressedColor = cPressed;
-+            b.backgroundColor = cIdle;
++            [b applyIdleColor:cIdle pressedColor:cPressed];
 +        }
 +
++        self.buttonStart.accessibilityLabel = @"Start";
++        self.buttonZLeft.accessibilityLabel = @"Z above steering";
++        self.buttonZRight.accessibilityLabel = @"Z right";
++        self.cUp.accessibilityLabel = @"C Up";
++        self.cDown.accessibilityLabel = @"C Down";
++        self.cLeft.accessibilityLabel = @"C Left";
++        self.cRight.accessibilityLabel = @"C Right";
++        self.menuButton.accessibilityLabel = @"Menu";
++
++        self.stick.accessibilityIdentifier = @"stick";
++        self.buttonA.accessibilityIdentifier = @"a";
++        self.buttonB.accessibilityIdentifier = @"b";
++        self.buttonL.accessibilityIdentifier = @"l";
++        self.buttonZLeft.accessibilityIdentifier = @"z-left";
++        self.buttonZRight.accessibilityIdentifier = @"z-right";
++        self.buttonR.accessibilityIdentifier = @"r";
++        self.buttonStart.accessibilityIdentifier = @"start";
++        self.cUp.accessibilityIdentifier = @"c-up";
++        self.cDown.accessibilityIdentifier = @"c-down";
++        self.cLeft.accessibilityIdentifier = @"c-left";
++        self.cRight.accessibilityIdentifier = @"c-right";
++        self.menuButton.accessibilityIdentifier = @"menu";
++
 +        self.buttons = @[
-+            self.buttonA, self.buttonB, self.buttonL, self.buttonZ, self.buttonR,
-+            self.buttonStart, self.cUp, self.cDown, self.cLeft, self.cRight,
++            self.buttonA, self.buttonB, self.buttonL, self.buttonZLeft, self.buttonZRight,
++            self.buttonR, self.buttonStart, self.cUp, self.cDown, self.cLeft, self.cRight,
 +            self.menuButton
 +        ];
 +        [self addSubview:self.stick];
 +        for (BarrelPadTouchButton *b in self.buttons) {
 +            [self addSubview:b];
 +        }
++
++        self.editableControls = @[
++            self.stick, self.buttonA, self.buttonB, self.buttonL,
++            self.buttonZLeft, self.buttonZRight, self.buttonR, self.buttonStart,
++            self.cUp, self.cDown, self.cLeft, self.cRight,
++        ];
++        self.layoutCenters = [NSMutableDictionary dictionary];
++        self.layoutScales = [NSMutableDictionary dictionary];
++        self.defaultSizes = [NSMutableDictionary dictionary];
++
++        self.editorPanel = [[UIView alloc] initWithFrame:CGRectZero];
++        self.editorPanel.backgroundColor =
++            [UIColor colorWithWhite:0.04 alpha:0.90];
++        self.editorPanel.layer.cornerRadius = 14.0;
++        self.editorPanel.layer.borderColor =
++            [UIColor colorWithWhite:1.0 alpha:0.55].CGColor;
++        self.editorPanel.layer.borderWidth = 1.5;
++        self.editorPanel.hidden = YES;
++
++        self.editorLabel = [[UILabel alloc] initWithFrame:CGRectZero];
++        self.editorLabel.text = @"Select a control";
++        self.editorLabel.textColor = UIColor.whiteColor;
++        self.editorLabel.font =
++            [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
++        [self.editorPanel addSubview:self.editorLabel];
++
++        self.sizeSlider = [[UISlider alloc] initWithFrame:CGRectZero];
++        self.sizeSlider.minimumValue = 0.70f;
++        self.sizeSlider.maximumValue = 1.50f;
++        self.sizeSlider.value = 1.0f;
++        self.sizeSlider.continuous = YES;
++        self.sizeSlider.minimumTrackTintColor =
++            [UIColor colorWithRed:0.10 green:0.48 blue:0.92 alpha:1.0];
++        [self.sizeSlider addTarget:self action:@selector(editorSizeChanged:)
++                  forControlEvents:UIControlEventValueChanged];
++        [self.editorPanel addSubview:self.sizeSlider];
++
++        self.resetButton = [UIButton buttonWithType:UIButtonTypeSystem];
++        [self.resetButton setTitle:@"Reset" forState:UIControlStateNormal];
++        [self.resetButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
++        self.resetButton.backgroundColor = [UIColor colorWithWhite:0.25 alpha:0.90];
++        self.resetButton.layer.cornerRadius = 10.0;
++        [self.resetButton addTarget:self action:@selector(resetCurrentLayout)
++                   forControlEvents:UIControlEventTouchUpInside];
++        [self.editorPanel addSubview:self.resetButton];
++
++        self.doneButton = [UIButton buttonWithType:UIButtonTypeSystem];
++        [self.doneButton setTitle:@"Done" forState:UIControlStateNormal];
++        [self.doneButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
++        self.doneButton.backgroundColor =
++            [UIColor colorWithRed:0.10 green:0.48 blue:0.92 alpha:0.92];
++        self.doneButton.layer.cornerRadius = 10.0;
++        [self.doneButton addTarget:self action:@selector(endLayoutEditing)
++                  forControlEvents:UIControlEventTouchUpInside];
++        [self.editorPanel addSubview:self.doneButton];
++        [self addSubview:self.editorPanel];
++
++        for (UIView *control in self.editableControls) {
++            UIPanGestureRecognizer *pan =
++                [[UIPanGestureRecognizer alloc] initWithTarget:self
++                                                        action:@selector(moveControl:)];
++            pan.enabled = NO;
++            pan.cancelsTouchesInView = YES;
++            [control addGestureRecognizer:pan];
++            UITapGestureRecognizer *tap =
++                [[UITapGestureRecognizer alloc] initWithTarget:self
++                                                        action:@selector(selectControlGesture:)];
++            tap.enabled = NO;
++            tap.cancelsTouchesInView = YES;
++            [control addGestureRecognizer:tap];
++        }
 +    }
 +    return self;
-+}
-+
-+/* Silence missing applyIdleColor if category not on base — implement here. */
-+- (void)doesNotRecognizeSelector:(SEL)aSelector {
-+    [super doesNotRecognizeSelector:aSelector];
 +}
 +
 +- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
@@ -1482,59 +1753,387 @@ index 0000000..c727b7e
 +
 +- (void)layoutSubviews {
 +    [super layoutSubviews];
++    if (self.superview != nil) {
++        [self.superview bringSubviewToFront:self];
++    }
 +    UIEdgeInsets safe = self.safeAreaInsets;
 +    CGFloat width = CGRectGetWidth(self.bounds);
 +    CGFloat height = CGRectGetHeight(self.bounds);
-+    BarrelPadLayoutKind kind = BarrelPad_LayoutKindForSize((float)width, (float)height);
-+    BOOL phone = (kind == kBarrelPadLayoutPhone);
++    /* SpaghettiPad: height < 560 → purpose-built phone layout (not a shrink). */
++    BOOL compact = height < 560.0;
 +
-+    CGFloat left = safe.left + (phone ? 10.0 : 24.0);
-+    CGFloat right = safe.right + (phone ? 10.0 : 24.0);
-+    CGFloat bottom = safe.bottom + (phone ? 10.0 : 20.0);
-+    CGFloat top = safe.top + 8.0;
++    if (compact) {
++        /*
++         * Keep the iPad grammar: L/Z/R above steering; A/B/Z on the outer
++         * action rail; C below and inboard. Phone is a tighter version of that
++         * layout, not a separate button map.
++         */
++        CGFloat left = safe.left + 10.0 * sTouchControlScale;
++        CGFloat right = safe.right + 8.0 * sTouchControlScale;
++        CGFloat bottomY = height - safe.bottom;
++        CGFloat s = sTouchControlScale * MAX(0.82, MIN(1.0, height / 390.0));
 +
-+    CGFloat stickSize = phone ? 124.0 : 150.0;
-+    CGPoint stickCenter =
-+        CGPointMake(left + stickSize * 0.55, height - bottom - stickSize * 0.55);
-+    self.stick.frame = CP_Frame(stickCenter, stickSize, stickSize);
++        CGFloat stickSize = 112.0 * s;
++        CGPoint stickCenter = CGPointMake(left + 88.0 * s, bottomY - 74.0 * s);
++        self.stick.frame = CP_Frame(stickCenter, stickSize, stickSize);
 +
-+    CGFloat shoulder = phone ? 48.0 : 54.0;
-+    self.buttonZ.frame =
-+        CP_Frame(CGPointMake(stickCenter.x + 8.0,
-+                             CGRectGetMinY(self.stick.frame) - 8.0 - shoulder * 0.5),
-+                 shoulder, shoulder);
-+    self.buttonL.frame =
-+        CP_Frame(CGPointMake(stickCenter.x - shoulder - 4.0,
-+                             CGRectGetMidY(self.buttonZ.frame)),
-+                 shoulder, shoulder);
++        CGFloat leftButton = 46.0 * s;
++        self.buttonZLeft.frame = CP_Frame(
++            CGPointMake(stickCenter.x, bottomY - 172.0 * s),
++            leftButton, leftButton);
++        self.buttonL.frame = CP_Frame(
++            CGPointMake(stickCenter.x - 52.0 * s,
++                        CGRectGetMidY(self.buttonZLeft.frame)),
++            leftButton, leftButton);
++        self.buttonR.frame = CP_Frame(
++            CGPointMake(stickCenter.x + 52.0 * s,
++                        CGRectGetMidY(self.buttonZLeft.frame)),
++            leftButton, leftButton);
 +
-+    CGFloat aSize = phone ? 78.0 : 90.0;
-+    CGFloat bSize = phone ? 64.0 : 72.0;
-+    CGFloat rSize = phone ? 56.0 : 64.0;
-+    CGPoint aCenter =
-+        CGPointMake(width - right - aSize * 0.55, height - bottom - aSize * 0.55);
-+    self.buttonA.frame = CP_Frame(aCenter, aSize, aSize);
-+    self.buttonB.frame =
-+        CP_Frame(CGPointMake(aCenter.x - bSize - 12.0, aCenter.y + 8.0), bSize, bSize);
-+    self.buttonR.frame =
-+        CP_Frame(CGPointMake(aCenter.x + 4.0, aCenter.y - aSize * 0.85), rSize, rSize);
++        /* Right rail mirrors the tablet: face buttons outside, C-pad inboard. */
++        CGFloat aSize = 58.0 * s;
++        CGFloat bSize = 54.0 * s;
++        CGFloat zSize = 50.0 * s;
++        CGFloat rightEdge = width - right;
++        self.buttonA.frame =
++            CP_Frame(CGPointMake(rightEdge - 48.0 * s, bottomY - 62.0 * s), aSize, aSize);
++        self.buttonB.frame =
++            CP_Frame(CGPointMake(rightEdge - 112.0 * s, bottomY - 76.0 * s), bSize, bSize);
++        self.buttonZRight.frame =
++            CP_Frame(CGPointMake(rightEdge - 46.0 * s, bottomY - 136.0 * s), zSize, zSize);
 +
-+    CGFloat cSize = phone ? 40.0 : 46.0;
-+    CGPoint cCenter = CGPointMake(aCenter.x - 10.0, top + cSize * 2.2 + 20.0);
-+    self.cUp.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y - cSize), cSize, cSize);
-+    self.cDown.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y + cSize), cSize, cSize);
-+    self.cLeft.frame = CP_Frame(CGPointMake(cCenter.x - cSize, cCenter.y), cSize, cSize);
-+    self.cRight.frame = CP_Frame(CGPointMake(cCenter.x + cSize, cCenter.y), cSize, cSize);
++        /* Move the permanent menu inward: it must be reachable without
++         * stretching into the system-edge gesture area. */
++        CGFloat menuSize = 36.0 * s;
++        CGRect menuFrame = CP_MenuFrame(self.bounds, safe, menuSize);
++        menuFrame.origin.x -= 20.0 * s;
++        menuFrame.origin.y += 8.0 * s;
++        self.menuButton.frame = menuFrame;
++        CGFloat startSize = 44.0 * s;
++        self.buttonStart.frame = CP_Frame(
++            CGPointMake(CGRectGetMidX(menuFrame), CGRectGetMaxY(menuFrame) + 6.0 + startSize * 0.5),
++            startSize, startSize);
 +
-+    CGFloat startW = phone ? 52.0 : 58.0;
-+    self.menuButton.frame =
-+        CGRectMake(width - right - startW, top, startW, 28.0);
-+    self.buttonStart.frame =
-+        CGRectMake(width - right - startW, top + 32.0, startW, 36.0);
++        CGFloat cSize = 38.0 * s;
++        CGFloat cRadius = 32.0 * s;
++        CGFloat cX = rightEdge - 210.0 * s;
++        CGFloat cY = bottomY - 76.0 * s;
++        self.cUp.frame = CP_Frame(CGPointMake(cX, cY - cRadius), cSize, cSize);
++        self.cDown.frame = CP_Frame(CGPointMake(cX, cY + cRadius), cSize, cSize);
++        self.cLeft.frame = CP_Frame(CGPointMake(cX - cRadius, cY), cSize, cSize);
++        self.cRight.frame = CP_Frame(CGPointMake(cX + cRadius, cY), cSize, cSize);
 +
-+    BarrelPad_Log("layout kind=%s size=%.0fx%.0f safe L%.0f R%.0f T%.0f B%.0f",
-+                 phone ? "phone" : "tablet", width, height, safe.left, safe.right,
-+                 safe.top, safe.bottom);
++        for (BarrelPadTouchButton *button in self.buttons) {
++            button.titleLabel.font =
++                [UIFont systemFontOfSize:14.0 * s weight:UIFontWeightSemibold];
++        }
++        self.buttonA.titleLabel.font =
++            [UIFont systemFontOfSize:17.0 * s weight:UIFontWeightBold];
++        self.buttonB.titleLabel.font =
++            [UIFont systemFontOfSize:16.0 * s weight:UIFontWeightBold];
++        self.buttonStart.titleLabel.font =
++            [UIFont systemFontOfSize:14.0 * s weight:UIFontWeightBold];
++        [self finishControlLayoutForCompact:YES];
++        return;
++    }
++
++    /* Tablet / large landscape — SpaghettiPad rail layout. */
++    CGFloat scale = sTouchControlScale * MAX(0.78, MIN(1.12, height / 834.0));
++    CGFloat usableWidth = width - safe.left - safe.right;
++    CGFloat railWidth = MIN(250.0 * scale, usableWidth * 0.22);
++    CGFloat leftCenter = safe.left + railWidth * 0.5;
++    CGFloat rightCenter = width - safe.right - railWidth * 0.5;
++    CGFloat middleCenterY = height * 0.60;
++    CGFloat lowCenterY = height * 0.86;
++    CGFloat stickCenterX = leftCenter + 65.0 * scale;
++    CGFloat stickCenterY = lowCenterY - 70.0 * scale;
++    CGFloat faceCenterX = rightCenter + 24.0 * scale;
++    CGFloat faceCenterY = middleCenterY + 30.0 * scale;
++    CGFloat cpadCenterX = rightCenter + 24.0 * scale;
++    CGFloat cpadCenterY = lowCenterY - 20.0 * scale;
++
++    CGFloat stickSize = 150.0 * scale;
++    self.stick.frame =
++        CP_Frame(CGPointMake(stickCenterX, stickCenterY), stickSize, stickSize);
++    CGFloat stickZSize = 56.0 * scale;
++    CGFloat stickZGap = 12.0 * scale;
++    self.buttonZLeft.frame = CP_Frame(
++        CGPointMake(stickCenterX,
++                    CGRectGetMinY(self.stick.frame) - stickZGap - stickZSize * 0.5),
++        stickZSize, stickZSize);
++    self.buttonL.frame = CP_Frame(
++        CGPointMake(stickCenterX - stickZSize - stickZGap,
++                    CGRectGetMidY(self.buttonZLeft.frame)),
++        stickZSize, stickZSize);
++    self.buttonR.frame = CP_Frame(
++        CGPointMake(stickCenterX + stickZSize + stickZGap,
++                    CGRectGetMidY(self.buttonZLeft.frame)),
++        stickZSize, stickZSize);
++
++    CGFloat faceSize = 66.0 * scale;
++    CGFloat faceX = faceCenterX - faceSize * 0.5;
++    self.buttonA.frame =
++        CGRectMake(faceX, faceCenterY + 12.0 * scale, faceSize, faceSize);
++    self.buttonB.frame = CP_Frame(
++        CGPointMake(faceX - faceSize * 0.5 - 10.0 * scale, faceCenterY), faceSize,
++        faceSize);
++    self.buttonZRight.frame =
++        CGRectMake(faceX, faceCenterY - faceSize - 12.0 * scale, faceSize, faceSize);
++    CGFloat startSize = 54.0 * scale;
++    CGFloat startGap = 12.0 * scale;
++    self.buttonStart.frame = CP_Frame(
++        CGPointMake(CGRectGetMidX(self.buttonZRight.frame),
++                    CGRectGetMinY(self.buttonZRight.frame) - startGap - startSize * 0.5),
++        startSize, startSize);
++
++    CGFloat menuSize = 44.0 * scale;
++    self.menuButton.frame = CP_MenuFrame(self.bounds, safe, menuSize);
++
++    CGFloat cSize = 46.0 * scale;
++    CGFloat cRadius = 44.0 * scale;
++    CGPoint cCenter = CGPointMake(cpadCenterX, cpadCenterY);
++    self.cUp.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y - cRadius), cSize, cSize);
++    self.cDown.frame = CP_Frame(CGPointMake(cCenter.x, cCenter.y + cRadius), cSize, cSize);
++    self.cLeft.frame = CP_Frame(CGPointMake(cCenter.x - cRadius, cCenter.y), cSize, cSize);
++    self.cRight.frame = CP_Frame(CGPointMake(cCenter.x + cRadius, cCenter.y), cSize, cSize);
++
++    CGFloat labelSize = 18.0 * scale;
++    for (BarrelPadTouchButton *button in self.buttons) {
++        button.titleLabel.font =
++            [UIFont systemFontOfSize:labelSize weight:UIFontWeightSemibold];
++    }
++    self.buttonStart.titleLabel.font =
++        [UIFont systemFontOfSize:18.0 * scale weight:UIFontWeightBold];
++    self.buttonA.titleLabel.font =
++        [UIFont systemFontOfSize:20.0 * scale weight:UIFontWeightBold];
++    [self finishControlLayoutForCompact:NO];
++}
++
++- (NSString *)profileForCompact:(BOOL)compact {
++    return compact ? @"phone-v1" : @"tablet-v1";
++}
++
++- (NSString *)storageKeyForProfile:(NSString *)profile {
++    return [@"BarrelPad.TouchLayout." stringByAppendingString:profile];
++}
++
++- (void)loadLayoutForProfile:(NSString *)profile {
++    if ([self.layoutProfile isEqualToString:profile]) {
++        return;
++    }
++    self.layoutProfile = profile;
++    [self.layoutCenters removeAllObjects];
++    [self.layoutScales removeAllObjects];
++    NSDictionary *stored = [NSUserDefaults.standardUserDefaults
++        dictionaryForKey:[self storageKeyForProfile:profile]];
++    NSDictionary *centers = stored[@"centers"];
++    if ([centers isKindOfClass:NSDictionary.class]) {
++        [self.layoutCenters addEntriesFromDictionary:centers];
++    }
++    NSDictionary *scales = stored[@"scales"];
++    if ([scales isKindOfClass:NSDictionary.class]) {
++        [self.layoutScales addEntriesFromDictionary:scales];
++    }
++}
++
++- (void)clampControlToSafeBounds:(UIView *)control {
++    UIEdgeInsets safe = self.safeAreaInsets;
++    CGFloat halfW = CGRectGetWidth(control.bounds) * 0.5;
++    CGFloat halfH = CGRectGetHeight(control.bounds) * 0.5;
++    CGFloat minX = safe.left + halfW + 4.0;
++    CGFloat maxX = CGRectGetWidth(self.bounds) - safe.right - halfW - 4.0;
++    CGFloat minY = safe.top + halfH + 4.0;
++    CGFloat maxY = CGRectGetHeight(self.bounds) - safe.bottom - halfH - 4.0;
++    control.center = CGPointMake(
++        MIN(MAX(control.center.x, minX), MAX(minX, maxX)),
++        MIN(MAX(control.center.y, minY), MAX(minY, maxY)));
++}
++
++- (void)layoutEditorPanel {
++    if (self.editorPanel.hidden) {
++        return;
++    }
++    UIEdgeInsets safe = self.safeAreaInsets;
++    CGFloat width = MIN(620.0,
++        CGRectGetWidth(self.bounds) - safe.left - safe.right - 24.0);
++    self.editorPanel.frame = CGRectMake(
++        CGRectGetMidX(self.bounds) - width * 0.5, safe.top + 8.0, width, 58.0);
++    self.editorLabel.frame = CGRectMake(14.0, 0.0, 150.0, 58.0);
++    self.sizeSlider.frame = CGRectMake(170.0, 0.0, width - 350.0, 58.0);
++    self.resetButton.frame = CGRectMake(width - 168.0, 8.0, 74.0, 42.0);
++    self.doneButton.frame = CGRectMake(width - 86.0, 8.0, 74.0, 42.0);
++}
++
++- (void)finishControlLayoutForCompact:(BOOL)compact {
++    [self loadLayoutForProfile:[self profileForCompact:compact]];
++    CGFloat width = CGRectGetWidth(self.bounds);
++    CGFloat height = CGRectGetHeight(self.bounds);
++    for (UIView *control in self.editableControls) {
++        NSString *key = control.accessibilityIdentifier;
++        CGSize baseSize = control.bounds.size;
++        self.defaultSizes[key] = [NSValue valueWithCGSize:baseSize];
++        CGFloat controlScale = self.layoutScales[key] == nil
++            ? 1.0
++            : MIN(MAX(self.layoutScales[key].doubleValue, 0.70), 1.50);
++        control.bounds = CGRectMake(
++            0.0, 0.0, baseSize.width * controlScale,
++            baseSize.height * controlScale);
++        NSArray<NSNumber *> *center = self.layoutCenters[key];
++        if (center == nil && compact) {
++            center = BarrelPad_DefaultPhoneCenters()[key];
++        }
++        if ([center isKindOfClass:NSArray.class] && center.count == 2) {
++            control.center = CGPointMake(
++                center[0].doubleValue * width,
++                center[1].doubleValue * height);
++        }
++        [self clampControlToSafeBounds:control];
++        control.layer.shadowColor =
++            [UIColor colorWithRed:1.0 green:0.78 blue:0.16 alpha:1.0].CGColor;
++        BOOL selected = self.layoutEditing && control == self.selectedControl;
++        control.layer.shadowRadius = selected ? 8.0 : 0.0;
++        control.layer.shadowOpacity = selected ? 1.0 : 0.0;
++        control.layer.shadowOffset = CGSizeZero;
++    }
++    [self layoutEditorPanel];
++    if (self.layoutEditing) {
++        [self bringSubviewToFront:self.editorPanel];
++    }
++}
++
++- (void)saveCurrentLayout {
++    if (self.layoutProfile.length == 0) {
++        return;
++    }
++    [NSUserDefaults.standardUserDefaults
++        setObject:@{
++            @"centers": [self.layoutCenters copy],
++            @"scales": [self.layoutScales copy],
++        }
++           forKey:[self storageKeyForProfile:self.layoutProfile]];
++}
++
++- (void)selectControl:(UIView *)control {
++    if (!self.layoutEditing || control == nil) {
++        return;
++    }
++    self.selectedControl = control;
++    NSString *key = control.accessibilityIdentifier;
++    CGFloat scale = self.layoutScales[key] == nil
++        ? 1.0 : self.layoutScales[key].floatValue;
++    self.sizeSlider.value = scale;
++    NSString *name = control.accessibilityLabel.length > 0
++        ? control.accessibilityLabel : key;
++    self.editorLabel.text =
++        [NSString stringWithFormat:@"%@  %.2fx", name, (double)scale];
++    [self setNeedsLayout];
++}
++
++- (void)selectControlGesture:(UITapGestureRecognizer *)gesture {
++    [self selectControl:gesture.view];
++}
++
++- (void)moveControl:(UIPanGestureRecognizer *)gesture {
++    UIView *control = gesture.view;
++    if (!self.layoutEditing || control == nil) {
++        return;
++    }
++    if (gesture.state == UIGestureRecognizerStateBegan) {
++        [self selectControl:control];
++    }
++    CGPoint delta = [gesture translationInView:self];
++    control.center = CGPointMake(control.center.x + delta.x,
++                                 control.center.y + delta.y);
++    [gesture setTranslation:CGPointZero inView:self];
++    [self clampControlToSafeBounds:control];
++    self.layoutCenters[control.accessibilityIdentifier] = @[
++        @(control.center.x / CGRectGetWidth(self.bounds)),
++        @(control.center.y / CGRectGetHeight(self.bounds)),
++    ];
++}
++
++- (void)editorSizeChanged:(UISlider *)slider {
++    UIView *control = self.selectedControl;
++    NSString *key = control.accessibilityIdentifier;
++    NSValue *baseValue = self.defaultSizes[key];
++    if (!self.layoutEditing || control == nil || key.length == 0 || baseValue == nil) {
++        return;
++    }
++    CGFloat scale = MIN(MAX(slider.value, 0.70f), 1.50f);
++    self.layoutScales[key] = @(scale);
++    CGSize baseSize = baseValue.CGSizeValue;
++    control.bounds = CGRectMake(
++        0.0, 0.0, baseSize.width * scale, baseSize.height * scale);
++    [self clampControlToSafeBounds:control];
++    self.layoutCenters[key] = @[
++        @(control.center.x / CGRectGetWidth(self.bounds)),
++        @(control.center.y / CGRectGetHeight(self.bounds)),
++    ];
++    NSString *name = control.accessibilityLabel.length > 0
++        ? control.accessibilityLabel : key;
++    self.editorLabel.text =
++        [NSString stringWithFormat:@"%@  %.2fx", name, (double)scale];
++    [self setNeedsLayout];
++}
++
++- (void)resetCurrentLayout {
++    [self.layoutCenters removeAllObjects];
++    [self.layoutScales removeAllObjects];
++    [NSUserDefaults.standardUserDefaults
++        removeObjectForKey:[self storageKeyForProfile:self.layoutProfile]];
++    self.sizeSlider.value = 1.0f;
++    NSString *name = self.selectedControl.accessibilityLabel.length > 0
++        ? self.selectedControl.accessibilityLabel
++        : self.selectedControl.accessibilityIdentifier;
++    self.editorLabel.text = name.length > 0
++        ? [NSString stringWithFormat:@"%@  1.00x", name]
++        : @"Select a control";
++    [self setNeedsLayout];
++}
++
++- (void)beginLayoutEditing {
++    if (self.layoutEditing) {
++        return;
++    }
++    [self cancelAllInputs];
++    sLayoutEditorActive = YES;
++    self.layoutEditing = YES;
++    for (UIView *control in self.editableControls) {
++        for (UIGestureRecognizer *gesture in control.gestureRecognizers) {
++            if ([gesture isKindOfClass:UIPanGestureRecognizer.class] ||
++                [gesture isKindOfClass:UITapGestureRecognizer.class]) {
++                gesture.enabled = YES;
++            }
++        }
++    }
++    self.editorPanel.hidden = NO;
++    self.menuButton.hidden = YES;
++    [self selectControl:self.buttonA];
++    [self setNeedsLayout];
++    BarrelPad_Log("touch layout editor opened");
++}
++
++- (void)endLayoutEditing {
++    if (!self.layoutEditing) {
++        return;
++    }
++    [self saveCurrentLayout];
++    self.layoutEditing = NO;
++    sLayoutEditorActive = NO;
++    for (UIView *control in self.editableControls) {
++        for (UIGestureRecognizer *gesture in control.gestureRecognizers) {
++            if ([gesture isKindOfClass:UIPanGestureRecognizer.class] ||
++                [gesture isKindOfClass:UITapGestureRecognizer.class]) {
++                gesture.enabled = NO;
++            }
++        }
++    }
++    self.editorPanel.hidden = YES;
++    self.selectedControl = nil;
++    self.menuButton.hidden = NO;
++    BarrelPad_RestoreTouchInputAfterEditing();
++    [self setNeedsLayout];
++    BarrelPad_Log("touch layout saved");
 +}
 +
 +- (void)cancelAllInputs {
@@ -1553,18 +2152,55 @@ index 0000000..c727b7e
 +    if (sOverlay == nil) {
 +        return;
 +    }
-+    BOOL show = sTouchControlsDesired && !sMenuVisible.load();
-+    sOverlay.hidden = !show;
-+    if (!show) {
++    if (sLayoutEditorActive) {
++        for (BarrelPadTouchButton *b in sOverlay.buttons) {
++            b.hidden = b == sOverlay.menuButton;
++        }
++        sOverlay.stick.hidden = NO;
++        return;
++    }
++    const BOOL show = BarrelPad_TouchControlsEffective();
++    const BOOL menuOpen = sMenuVisible.load();
++    /* Race controls hide while the host ImGui menu is open so they never sit
++     * on top of it; the persistent ••• button stays reachable to come back.
++     * Matches SpaghettiPad's "settings menu hides the race controls" design. */
++    for (BarrelPadTouchButton *b in sOverlay.buttons) {
++        b.hidden = b == sOverlay.menuButton ? NO : (!show || menuOpen);
++    }
++    sOverlay.stick.hidden = !show || menuOpen;
++    /* Keep Settings reachable even when gameplay touch is disabled. */
++    sOverlay.menuButton.hidden = NO;
++    if (!show || menuOpen) {
 +        [sOverlay cancelAllInputs];
 +        BarrelPad_ResetAllInputs();
 +    }
++}
++
++static void BarrelPad_RestoreTouchInputAfterEditing(void) {
++    if (sOverlay == nil) {
++        return;
++    }
++    /* End editing at a hard input boundary: discard editor gestures and stale
++     * held state, restore the touch source, then rebuild visibility from the
++     * actual menu/touch preferences. This makes Done immediately playable. */
++    [sOverlay cancelAllInputs];
++    BarrelPad_ResetAllInputs();
++    sMenuVisible.store(false);
++    platform_ios_touch_set(0, 0, 0,
++                           BarrelPad_TouchControlsEffective() ? 1 : 0);
++    BarrelPad_ApplyTouchControlsState();
++    BarrelPad_Log("touch input restored after layout editing");
 +}
 +
 +static void BarrelPad_InstallOverlay(void) {
 +    if (sOverlay != nil || sSDLWindow == nil) {
 +        return;
 +    }
++    /* Apply the persisted touch-control size before the first layout. */
++    const std::string scaleText = AppConfig::get("touch_control_scale", "1.0");
++    const float parsedScale = (float)std::atof(scaleText.c_str());
++    sTouchControlScale = parsedScale < 0.5f ? 0.5f
++                       : (parsedScale > 2.0f ? 2.0f : parsedScale);
 +    sOverlay = [[BarrelPadTouchOverlay alloc] initWithFrame:sSDLWindow.bounds];
 +    sOverlay.autoresizingMask =
 +        UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -1573,7 +2209,8 @@ index 0000000..c727b7e
 +    sOverlay.opaque = NO;
 +    sOverlay.alpha = 1.0;
 +    [sSDLWindow bringSubviewToFront:sOverlay];
-+    BarrelPad_AttachVirtualController();
++    platform_ios_touch_set(0, 0, 0,
++                           BarrelPad_TouchControlsEffective() ? 1 : 0);
 +    BarrelPad_ApplyTouchControlsState();
 +    BarrelPad_Log("touch overlay installed");
 +}
@@ -1641,15 +2278,18 @@ index 0000000..c727b7e
 +}
 +
 +void BarrelPad_InitializeTouchControls(void) {
-+    sTouchControlsDesired = YES;
-+    BarrelPad_Log("initialize touch controls");
++    const std::string enabledText =
++        AppConfig::get("touch_controls_enabled", "1");
++    sTouchControlsDesired.store(enabledText != "0");
++    BarrelPad_Log("initialize touch controls enabled=%d",
++                  sTouchControlsDesired.load() ? 1 : 0);
 +    if (sSDLWindow != nil) {
 +        BarrelPad_InstallOverlay();
 +    }
 +}
 +
 +void BarrelPad_SetTouchControlsEnabled(int enabled) {
-+    sTouchControlsDesired = enabled ? YES : NO;
++    sTouchControlsDesired.store(enabled != 0);
 +    BarrelPad_ApplyTouchControlsState();
 +}
 +
@@ -1665,6 +2305,86 @@ index 0000000..c727b7e
 +    BarrelPad_ApplyTouchControlsState();
 +}
 +
++/* Called by the host overlay (ui_overlay.cpp) whenever the ImGui menu opens or
++ * closes so the race controls never cover it. Weak on the engine side; this
++ * definition is what makes the hook live on iOS. */
++extern "C" void platform_ios_touch_menu_visible(int visible) {
++    dispatch_async(dispatch_get_main_queue(), ^{
++        BarrelPad_SetMenuVisible(visible);
++    });
++}
++
++extern "C" int platform_ios_touch_get_enabled(void) {
++    return sTouchControlsDesired.load() ? 1 : 0;
++}
++
++extern "C" void platform_ios_touch_set_enabled(int enabled) {
++    AppConfig::setAndSave("touch_controls_enabled", enabled ? "1" : "0");
++    dispatch_async(dispatch_get_main_queue(), ^{
++        BarrelPad_SetTouchControlsEnabled(enabled);
++        BarrelPad_Log("touch controls preference=%d", enabled ? 1 : 0);
++    });
++}
++
++extern "C" int platform_ios_touch_physical_controller_connected(void) {
++    return sPhysicalControllerConnected.load() ? 1 : 0;
++}
++
++extern "C" void platform_ios_physical_controller_changed(int connected) {
++    sPhysicalControllerConnected.store(connected != 0);
++    dispatch_async(dispatch_get_main_queue(), ^{
++        if (sOverlay != nil) {
++            [sOverlay cancelAllInputs];
++        }
++        BarrelPad_ResetAllInputs();
++        BarrelPad_ApplyTouchControlsState();
++        BarrelPad_Log("physical controller connected=%d touch visible=%d",
++                      connected ? 1 : 0,
++                      BarrelPad_TouchControlsEffective() ? 1 : 0);
++    });
++}
++
++/* Called by the Settings panel's "Touch control size" slider. */
++extern "C" void platform_ios_touch_set_scale(float scale) {
++    dispatch_async(dispatch_get_main_queue(), ^{
++        const float clamped = scale < 0.5f ? 0.5f : (scale > 2.0f ? 2.0f : scale);
++        if (clamped == sTouchControlScale) {
++            return;
++        }
++        sTouchControlScale = clamped;
++        [sOverlay setNeedsLayout];
++        BarrelPad_Log("touch control scale=%.2f", (double)clamped);
++    });
++}
++
++extern "C" int platform_ios_touch_get_preset(void) {
++    if (sTouchControlScale < 0.875f) return 1;
++    if (sTouchControlScale < 1.125f) return 2;
++    if (sTouchControlScale < 1.375f) return 3;
++    return 4;
++}
++
++extern "C" void platform_ios_touch_set_preset(int preset) {
++    static const float scales[] = { 0.75f, 1.0f, 1.25f, 1.5f };
++    int index = MAX(1, MIN(4, preset)) - 1;
++    float scale = scales[index];
++    char value[16];
++    std::snprintf(value, sizeof(value), "%.2f", (double)scale);
++    AppConfig::setAndSave("touch_control_scale", value);
++    platform_ios_touch_set_scale(scale);
++}
++
++extern "C" void platform_ios_touch_begin_edit(void) {
++    dispatch_async(dispatch_get_main_queue(), ^{
++        BarrelPad_SetMenuVisible(0);
++        [sOverlay beginLayoutEditing];
++    });
++}
++
++void BarrelPad_BeginTouchLayoutEditing(void) {
++    platform_ios_touch_begin_edit();
++}
++
 +float BarrelPad_RecommendedMenuScale(void) {
 +    if (sSDLWindow == nil) {
 +        return 1.0f;
@@ -1678,10 +2398,10 @@ index 0000000..c727b7e
 +}
 diff --git a/platform/barrelpad/BarrelPadTouchControls.h b/platform/barrelpad/BarrelPadTouchControls.h
 new file mode 100644
-index 0000000..2903f9b
+index 0000000..2d7de6c
 --- /dev/null
 +++ b/platform/barrelpad/BarrelPadTouchControls.h
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,23 @@
 +#pragma once
 +
 +#ifdef __cplusplus
@@ -1697,6 +2417,7 @@ index 0000000..2903f9b
 +void BarrelPad_SetGameplayActive(int active);
 +void BarrelPad_SetMenuVisible(int visible);
 +float BarrelPad_RecommendedMenuScale(void);
++void BarrelPad_BeginTouchLayoutEditing(void);
 +
 +/* Runtime logging helper used by shell and tests. */
 +void BarrelPad_Log(const char *fmt, ...);
@@ -1706,7 +2427,7 @@ index 0000000..2903f9b
 +#endif
 diff --git a/platform/barrelpad_ios_main.c b/platform/barrelpad_ios_main.c
 new file mode 100644
-index 0000000..7d8be6c
+index 0000000..45fbc29
 --- /dev/null
 +++ b/platform/barrelpad_ios_main.c
 @@ -0,0 +1,15 @@
@@ -1749,7 +2470,7 @@ index e7f056e..32703bc 100644
  #endif
 diff --git a/platform/gfx_opengl_ios_stub.c b/platform/gfx_opengl_ios_stub.c
 new file mode 100644
-index 0000000..387bfab
+index 0000000..83b4e54
 --- /dev/null
 +++ b/platform/gfx_opengl_ios_stub.c
 @@ -0,0 +1,24 @@
@@ -1778,7 +2499,7 @@ index 0000000..387bfab
 +/* Some TUs may reference these weakly. */
 +int gfx_opengl_zbuf_clear(void) { return stub_unused(); }
 diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
-index 30ca61e..2a764ae 100644
+index 30ca61e..490abaa 100644
 --- a/platform/platform_sdl_min.c
 +++ b/platform/platform_sdl_min.c
 @@ -31,7 +31,22 @@

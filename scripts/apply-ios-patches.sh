@@ -36,6 +36,15 @@ if [ -f "$PHONE_SETTINGS" ]; then
 fi
 # Direct P1 pad inject (shell → platform_ios_touch_set → input queue).
 python3 "$ROOT/scripts/ensure-ios-touch-inject.py" "$SRC"
+CONTROLLER_TAKEOVER="$ROOT/patches/goldenballoon-ios-controller-takeover.patch"
+if [ -f "$CONTROLLER_TAKEOVER" ]; then
+  if (cd "$SRC" && patch -p1 --forward --dry-run < "$CONTROLLER_TAKEOVER" >/dev/null 2>&1); then
+    (cd "$SRC" && patch -p1 --forward < "$CONTROLLER_TAKEOVER")
+    echo "[BarrelPad] applied goldenballoon-ios-controller-takeover.patch"
+  else
+    echo "[BarrelPad] controller-takeover patch already applied or not clean"
+  fi
+fi
 mkdir -p "$SRC/platform/barrelpad"
 cp -f "$ROOT/ios/BarrelPadShell.mm" "$ROOT/ios/BarrelPadTouchControls.h" \
   "$ROOT/src/BarrelPadInput.c" "$ROOT/src/BarrelPadInput.h" \

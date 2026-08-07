@@ -32,6 +32,11 @@ typedef enum BarrelPadLayoutKind {
     kBarrelPadLayoutTablet = 1
 } BarrelPadLayoutKind;
 
+/* Gameplay controls follow the saved preference, but a physical controller
+ * temporarily takes over Player 1 without changing that preference. */
+bool BarrelPad_GameplayTouchEnabled(bool preferenceEnabled,
+                                    bool physicalControllerConnected);
+
 /* Normalized layout rect in landscape UI coordinates: origin top-left,
  * x/y in [0,1], width/height relative to short/long edges of the safe area. */
 typedef struct BarrelPadLayoutRect {

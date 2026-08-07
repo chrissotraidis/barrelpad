@@ -21,3 +21,9 @@ Playable = DKR game (not host launcher) reaches race/track gameplay with control
   editor restores the live input path.
 - **Settings:** iPhone touch controls and the complete scrollable settings list
   remain separately accessible in landscape.
+- **iPad parity:** `•••` now exposes the same Touch Controls / All Settings
+  split as iPhone, including the saved gameplay-touch toggle.
+- **Controller takeover:** physical hardware owns SDL Player 1; gameplay touch
+  hides while connected and restores on disconnect when enabled. `•••` remains
+  available throughout. The event route and policy tests pass; a real
+  connect/disconnect session remains an explicit hands-on check.

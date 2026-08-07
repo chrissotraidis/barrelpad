@@ -12,7 +12,7 @@ compiled host code (the Golden Balloon / `mdkr64` engine). BarrelPad supplies:
 
 - Apple platform packaging and lifecycle
 - ROM discovery and legal boundary (local ROM only; never redistributed)
-- SpaghettiPad-inspired virtual N64 controller and touch overlays
+- SpaghettiPad-inspired touch overlays and direct N64 P1 injection
 - DKR-specific button mapping and phone/tablet layouts
 - Active runtime logging for diagnosis
 
@@ -23,7 +23,7 @@ compiled host code (the Golden Balloon / `mdkr64` engine). BarrelPad supplies:
 │  BarrelPad shell (this repo: ios/, macos/, scripts/, docs/)  │
 │  • lifecycle, logging, ROM path, touch overlay, layouts     │
 └───────────────────────────┬─────────────────────────────────┘
-                            │ SDL2 window / virtual controller
+                            │ SDL2 window / touch inject / physical controller
 ┌───────────────────────────▼─────────────────────────────────┐
 │  Golden Balloon host (ref/goldenballoon → sources/)         │
 │  • platform/* (SDL, audio, input, WebGPU/GL, launcher)      │
@@ -65,8 +65,9 @@ DKR N64 pad usage (racing-focused):
 | C-buttons | Camera / map interactions |
 | Start | Pause / start |
 
-BarrelPad maps touch controls to these via SDL virtual joystick + keyboard
-fallback, adapted from SpaghettiPad’s emission path but **without** Mario Kart
+BarrelPad maps touch controls through direct P1 injection + keyboard fallback,
+while physical controllers use SDL Player 1. The path is adapted from
+SpaghettiPad’s emission model but **without** Mario Kart
 item/hold semantics (no MK64 item-double-Z assumptions; A-hold assist is
 optional and DKR-tuned).
 

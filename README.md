@@ -110,15 +110,20 @@ BarrelPad uses separate landscape defaults for each device class:
   within right-thumb reach.
 - **iPad:** the larger tablet rail layout remains the default, with L/Z/R above
   the analog stick and the action/C-button groups on the right.
-- **Menu:** the persistent `•••` button opens the host settings without blocking
-  gameplay when the menu is closed.
-- **Quick sizing:** **Settings → Touch Controls** provides 1x–4x presets.
-- **Individual editing:** choose **Move Controls**, select any control, drag it,
-  and use the size slider to resize that control alone. **Done** saves the
-  device-class layout and restores gameplay input.
-- **Complete settings:** the iPhone sheet provides separate **Touch Controls**
-  and **All Settings** views; the full settings list remains vertically
-  scrollable in landscape.
+- **Menu:** `•••` always remains available. Its first screen exposes
+  **Touch Controls** directly, with **All Settings** beside it on both iPhone
+  and iPad.
+- **Visibility:** **Show gameplay touch controls** explicitly turns the racing
+  overlay on or off and remembers the choice.
+- **Controller takeover:** a physical Player 1 controller automatically hides
+  gameplay touch controls without changing the saved preference. Disconnecting
+  it restores touch controls when they were enabled.
+- **Quick sizing:** the Touch Controls page provides 1x–4x presets.
+- **Individual editing:** choose **Move & Resize Controls**, select any control,
+  drag it, and use the size slider to resize that control alone. **Done** saves
+  the device-class layout and restores gameplay input.
+- **Complete settings:** both device classes provide separate **Touch Controls**
+  and **All Settings** views; the complete list remains vertically scrollable.
 
 | Touch control | Diddy Kong Racing action |
 |---|---|
@@ -144,8 +149,9 @@ See [Touch controls](docs/TOUCH_CONTROLS.md) for the mapping and input path.
 | Native app | Builds for Apple silicon macOS, iOS Simulator, and arm64 iPhone/iPad devices |
 | Rendering | WebGPU through Metal; native widescreen landscape on iPhone and iPad |
 | Game setup | Files-visible, user-supplied ROM discovery and native game boot |
-| Touch | Full racing controls, A hold assist, presets, per-control movement and sizing |
-| Settings | Phone-sized menu with touch/all-settings views and direct vertical scrolling |
+| Touch | Full racing controls, persisted visibility, presets, per-control movement and sizing |
+| Controllers | Physical Player 1 takeover hides gameplay touch and restores it on disconnect |
+| Settings | Direct touch/all-settings access and vertical scrolling on iPhone and iPad |
 | Saves | EEPROM saves and in-place app updates preserving app-container data |
 | Packaging | ROM-free products; public IPA publication is still a separate release step |
 

@@ -9,7 +9,8 @@ Adapted from **SpaghettiPad** grip layout and behavior; mapped for
 - Safe-area aware (notch, home indicator, landscape insets)
 - Glass-style semi-transparent chrome so the game stays readable
 - Empty center remains the game (overlay `hitTest` passes through gaps)
-- Direct P1 pad inject (`platform_ios_touch_set`) plus virtual joystick backup
+- Direct P1 pad inject (`platform_ios_touch_set`), leaving SDL Player 1 free
+  for a physical controller
 - A hold-assist during races (SpaghettiPad behavior)
 
 ## Layout (SpaghettiPad reference)
@@ -38,10 +39,21 @@ the iPhone layout does not change the iPad default.
 
 ## Editing a layout
 
-Open **Settings → Touch Controls → Move Controls**. Select a control, drag it
-to a new position, and use the slider to resize only that control from 0.70x to
-1.50x. **Done** persists the active phone/tablet profile, closes the editor,
-clears any held input, and restores the gameplay touch path.
+Open `•••` and choose **Touch Controls → Move & Resize Controls**. Select a
+control, drag it to a new position, and use the slider to resize only that
+control from 0.70x to 1.50x. **Done** persists the active phone/tablet profile,
+closes the editor, clears any held input, and restores the gameplay touch path.
+
+## Visibility and physical controllers
+
+- **Show gameplay touch controls** is available directly from `•••` on both
+  iPhone and iPad and persists across launches.
+- The `•••` menu button remains visible even when gameplay controls are off.
+- A physical SDL controller takes Player 1 and temporarily hides the gameplay
+  touch overlay. Disconnecting it restores touch only when the saved preference
+  is enabled.
+- Touch uses direct P1 injection instead of registering a virtual SDL controller,
+  so the shell cannot occupy Player 1 before real hardware connects.
 
 ## Default racing mapping
 
@@ -69,11 +81,13 @@ clears any held input, and restores the gameplay touch path.
 
 - No Mario Kart dual-Z item-cycle semantics — both Z buttons fire the same DKR Z
 - Host key map is Golden Balloon (X=A, Z=B, Space=R, Shift=Z), not SpaghettiKart
-- Primary emission is N64 pad inject into P1, not only virtual joystick
+- Primary emission is direct N64 pad injection into P1; physical controllers
+  use SDL's normal Player 1 route
 
 ## Diagnostics
 
-- Logs: `touch action=…`, `pad inject buttons=0x…`
+- Logs: `touch action=…`, `pad inject buttons=0x…`,
+  `physical controller connected=… touch visible=…`
 - Force inject: `MDKR_IOS_FORCE_PAD=start|a|0x1000` (+ optional DELAY/HOLD frames)
 
 ## Implementation

@@ -1,5 +1,5 @@
 /*
- * BarrelPad iOS/iPadOS shell: touch overlay + virtual controller emission.
+ * BarrelPad iOS/iPadOS shell: touch overlay + direct P1 input emission.
  * Patterns adapted from SpaghettiPad; mappings tuned for Diddy Kong Racing
  * (Golden Balloon host keyboard/gamepad map).
  */
@@ -23,8 +23,6 @@
 #include "controller_mapping.h"
 
 static UIWindow *sSDLWindow;
-static SDL_Joystick *sVirtualJoystick;
-static int sVirtualDeviceIndex = -1;
 static std::array<int, kBarrelPadActionCount> sActionPressCounts = {};
 static unsigned int sHeldButtons = 0;
 static int sStickX = 0;
@@ -32,11 +30,17 @@ static int sStickY = 0;
 static std::atomic_bool sMenuVisible(false);
 static std::atomic_bool sTouchStickActive(false);
 static std::atomic_bool sGameplayActive(true);
-static BOOL sTouchControlsDesired = YES;
+static std::atomic_bool sPhysicalControllerConnected(false);
+static std::atomic_bool sTouchControlsDesired(true);
 static BOOL sLayoutEditorActive = NO;
 /* Persistent player-facing touch overlay scale (0.5x-2.0x). Main-thread only;
  * written by platform_ios_touch_set_scale and read during layout. */
 static float sTouchControlScale = 1.0f;
+
+static BOOL BarrelPad_TouchControlsEffective(void) {
+    return BarrelPad_GameplayTouchEnabled(
+        sTouchControlsDesired.load(), sPhysicalControllerConnected.load());
+}
 
 void BarrelPad_Log(const char *fmt, ...) {
     char buf[1024];
@@ -122,65 +126,14 @@ static unsigned int BarrelPad_ActionN64Bit(BarrelPadAction action) {
 }
 
 static void BarrelPad_PublishPad(void) {
-    /* Direct P1 merge into the engine input queue — reliable on iOS where a
-     * virtual joystick is not always bound as the game's primary controller. */
+    /* Direct P1 merge leaves SDL Player 1 free for a physical controller. */
     static unsigned int sLastLoggedButtons = 0xFFFFFFFFu;
-    platform_ios_touch_set(sHeldButtons, sStickX, sStickY, 1);
+    platform_ios_touch_set(sHeldButtons, sStickX, sStickY,
+                           BarrelPad_TouchControlsEffective() ? 1 : 0);
     if (sLastLoggedButtons != sHeldButtons) {
         BarrelPad_Log("pad inject buttons=0x%04x stick=%d,%d", sHeldButtons,
                      sStickX, sStickY);
         sLastLoggedButtons = sHeldButtons;
-    }
-}
-
-/* Mirror face/shoulder actions onto the virtual gamepad when attached. */
-static void BarrelPad_EmitVirtualButton(BarrelPadAction action, BOOL pressed) {
-    if (sVirtualJoystick == nullptr) {
-        return;
-    }
-    if (action == kBarrelPadActionZ) {
-        SDL_JoystickSetVirtualAxis(
-            sVirtualJoystick, SDL_CONTROLLER_AXIS_TRIGGERLEFT,
-            pressed ? SDL_JOYSTICK_AXIS_MAX : SDL_JOYSTICK_AXIS_MIN);
-        return;
-    }
-    Sint16 axisValue = pressed ? SDL_JOYSTICK_AXIS_MAX : 0;
-    if (action == kBarrelPadActionCUp) {
-        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTY,
-                                   (Sint16)(-axisValue));
-        return;
-    }
-    if (action == kBarrelPadActionCDown) {
-        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTY,
-                                   axisValue);
-        return;
-    }
-    if (action == kBarrelPadActionCLeft) {
-        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTX,
-                                   (Sint16)(-axisValue));
-        return;
-    }
-    if (action == kBarrelPadActionCRight) {
-        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTX,
-                                   axisValue);
-        return;
-    }
-    SDL_GameControllerButton button = SDL_CONTROLLER_BUTTON_INVALID;
-    switch (action) {
-        case kBarrelPadActionA: button = SDL_CONTROLLER_BUTTON_A; break;
-        case kBarrelPadActionB: button = SDL_CONTROLLER_BUTTON_B; break;
-        case kBarrelPadActionL: button = SDL_CONTROLLER_BUTTON_LEFTSHOULDER; break;
-        case kBarrelPadActionR: button = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER; break;
-        case kBarrelPadActionStart: button = SDL_CONTROLLER_BUTTON_START; break;
-        case kBarrelPadActionDUp: button = SDL_CONTROLLER_BUTTON_DPAD_UP; break;
-        case kBarrelPadActionDDown: button = SDL_CONTROLLER_BUTTON_DPAD_DOWN; break;
-        case kBarrelPadActionDLeft: button = SDL_CONTROLLER_BUTTON_DPAD_LEFT; break;
-        case kBarrelPadActionDRight: button = SDL_CONTROLLER_BUTTON_DPAD_RIGHT; break;
-        default: break;
-    }
-    if (button != SDL_CONTROLLER_BUTTON_INVALID) {
-        SDL_JoystickSetVirtualButton(sVirtualJoystick, button,
-                                     pressed ? SDL_PRESSED : SDL_RELEASED);
     }
 }
 
@@ -206,7 +159,6 @@ static void BarrelPad_EmitAction(BarrelPadAction action, BOOL pressed) {
         }
         BarrelPad_PublishPad();
     }
-    BarrelPad_EmitVirtualButton(action, pressed);
     /* Also synthesize keyboard for any host path that still reads keys. */
     SDL_Scancode scancode = BarrelPad_ActionScancode(action);
     if (scancode != SDL_SCANCODE_UNKNOWN) {
@@ -241,28 +193,6 @@ static void BarrelPad_SetStickAxes(Sint16 x, Sint16 y) {
     sStickX = sx;
     sStickY = sy;
     BarrelPad_PublishPad();
-    if (sVirtualJoystick != nullptr) {
-        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTX, x);
-        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTY, y);
-    }
-}
-
-static void BarrelPad_AttachVirtualController(void) {
-    if (sVirtualJoystick != nullptr) {
-        return;
-    }
-    sVirtualDeviceIndex = SDL_JoystickAttachVirtual(
-        SDL_JOYSTICK_TYPE_GAMECONTROLLER, 6, 16, 0);
-    if (sVirtualDeviceIndex < 0) {
-        BarrelPad_Log("virtual joystick attach failed: %s", SDL_GetError());
-        return;
-    }
-    sVirtualJoystick = SDL_JoystickOpen(sVirtualDeviceIndex);
-    if (sVirtualJoystick == nullptr) {
-        BarrelPad_Log("virtual joystick open failed: %s", SDL_GetError());
-        return;
-    }
-    BarrelPad_Log("virtual controller attached index=%d", sVirtualDeviceIndex);
 }
 
 static void BarrelPad_ResetAllInputs(void) {
@@ -275,14 +205,8 @@ static void BarrelPad_ResetAllInputs(void) {
     sHeldButtons = 0;
     sStickX = 0;
     sStickY = 0;
-    /* Keep the touch source enabled so later presses merge immediately. */
-    platform_ios_touch_set(0, 0, 0, sTouchControlsDesired ? 1 : 0);
-    if (sVirtualJoystick != nullptr) {
-        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTX, 0);
-        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTY, 0);
-        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_TRIGGERLEFT,
-                                   SDL_JOYSTICK_AXIS_MIN);
-    }
+    platform_ios_touch_set(0, 0, 0,
+                           BarrelPad_TouchControlsEffective() ? 1 : 0);
     sTouchStickActive.store(false);
 }
 
@@ -547,10 +471,6 @@ static void BarrelPad_ResetAllInputs(void) {
     sStickX = 0;
     sStickY = 0;
     BarrelPad_PublishPad();
-    if (sVirtualJoystick != nullptr) {
-        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTX, 0);
-        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTY, 0);
-    }
     sTouchStickActive.store(false);
     self.knob.center =
         CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
@@ -1176,7 +1096,7 @@ static void BarrelPad_RestoreTouchInputAfterEditing(void);
     }
     self.editorPanel.hidden = YES;
     self.selectedControl = nil;
-    self.menuButton.hidden = !sTouchControlsDesired;
+    self.menuButton.hidden = NO;
     BarrelPad_RestoreTouchInputAfterEditing();
     [self setNeedsLayout];
     BarrelPad_Log("touch layout saved");
@@ -1205,16 +1125,17 @@ static void BarrelPad_ApplyTouchControlsState(void) {
         sOverlay.stick.hidden = NO;
         return;
     }
-    const BOOL show = sTouchControlsDesired;
+    const BOOL show = BarrelPad_TouchControlsEffective();
     const BOOL menuOpen = sMenuVisible.load();
     /* Race controls hide while the host ImGui menu is open so they never sit
      * on top of it; the persistent ••• button stays reachable to come back.
      * Matches SpaghettiPad's "settings menu hides the race controls" design. */
     for (BarrelPadTouchButton *b in sOverlay.buttons) {
-        b.hidden = !show || menuOpen;
+        b.hidden = b == sOverlay.menuButton ? NO : (!show || menuOpen);
     }
     sOverlay.stick.hidden = !show || menuOpen;
-    sOverlay.menuButton.hidden = !show;
+    /* Keep Settings reachable even when gameplay touch is disabled. */
+    sOverlay.menuButton.hidden = NO;
     if (!show || menuOpen) {
         [sOverlay cancelAllInputs];
         BarrelPad_ResetAllInputs();
@@ -1231,7 +1152,8 @@ static void BarrelPad_RestoreTouchInputAfterEditing(void) {
     [sOverlay cancelAllInputs];
     BarrelPad_ResetAllInputs();
     sMenuVisible.store(false);
-    platform_ios_touch_set(0, 0, 0, sTouchControlsDesired ? 1 : 0);
+    platform_ios_touch_set(0, 0, 0,
+                           BarrelPad_TouchControlsEffective() ? 1 : 0);
     BarrelPad_ApplyTouchControlsState();
     BarrelPad_Log("touch input restored after layout editing");
 }
@@ -1253,8 +1175,8 @@ static void BarrelPad_InstallOverlay(void) {
     sOverlay.opaque = NO;
     sOverlay.alpha = 1.0;
     [sSDLWindow bringSubviewToFront:sOverlay];
-    BarrelPad_AttachVirtualController();
-    platform_ios_touch_set(0, 0, 0, 1);
+    platform_ios_touch_set(0, 0, 0,
+                           BarrelPad_TouchControlsEffective() ? 1 : 0);
     BarrelPad_ApplyTouchControlsState();
     BarrelPad_Log("touch overlay installed");
 }
@@ -1322,15 +1244,18 @@ int BarrelPad_TouchControlsAvailable(void) {
 }
 
 void BarrelPad_InitializeTouchControls(void) {
-    sTouchControlsDesired = YES;
-    BarrelPad_Log("initialize touch controls");
+    const std::string enabledText =
+        AppConfig::get("touch_controls_enabled", "1");
+    sTouchControlsDesired.store(enabledText != "0");
+    BarrelPad_Log("initialize touch controls enabled=%d",
+                  sTouchControlsDesired.load() ? 1 : 0);
     if (sSDLWindow != nil) {
         BarrelPad_InstallOverlay();
     }
 }
 
 void BarrelPad_SetTouchControlsEnabled(int enabled) {
-    sTouchControlsDesired = enabled ? YES : NO;
+    sTouchControlsDesired.store(enabled != 0);
     BarrelPad_ApplyTouchControlsState();
 }
 
@@ -1352,6 +1277,36 @@ void BarrelPad_SetMenuVisible(int visible) {
 extern "C" void platform_ios_touch_menu_visible(int visible) {
     dispatch_async(dispatch_get_main_queue(), ^{
         BarrelPad_SetMenuVisible(visible);
+    });
+}
+
+extern "C" int platform_ios_touch_get_enabled(void) {
+    return sTouchControlsDesired.load() ? 1 : 0;
+}
+
+extern "C" void platform_ios_touch_set_enabled(int enabled) {
+    AppConfig::setAndSave("touch_controls_enabled", enabled ? "1" : "0");
+    dispatch_async(dispatch_get_main_queue(), ^{
+        BarrelPad_SetTouchControlsEnabled(enabled);
+        BarrelPad_Log("touch controls preference=%d", enabled ? 1 : 0);
+    });
+}
+
+extern "C" int platform_ios_touch_physical_controller_connected(void) {
+    return sPhysicalControllerConnected.load() ? 1 : 0;
+}
+
+extern "C" void platform_ios_physical_controller_changed(int connected) {
+    sPhysicalControllerConnected.store(connected != 0);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (sOverlay != nil) {
+            [sOverlay cancelAllInputs];
+        }
+        BarrelPad_ResetAllInputs();
+        BarrelPad_ApplyTouchControlsState();
+        BarrelPad_Log("physical controller connected=%d touch visible=%d",
+                      connected ? 1 : 0,
+                      BarrelPad_TouchControlsEffective() ? 1 : 0);
     });
 }
 

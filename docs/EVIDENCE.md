@@ -1,11 +1,34 @@
 # Test evidence ledger
 
+## 2026-08-07 — Unified touch settings and controller takeover
+
+- iPhone and iPad now share the same direct `•••` navigation: **Touch Controls**
+  and **All Settings** are first-level actions, and the touch page contains the
+  saved visibility toggle, 1x–4x sizing, and layout editor entry.
+- Gameplay touch visibility is persisted as `touch_controls_enabled`. The
+  permanent `•••` target remains available while gameplay controls are off.
+- The shell no longer registers a virtual SDL controller. Physical hardware can
+  therefore claim Player 1; controller connect/disconnect events temporarily
+  hide and restore gameplay touch without overwriting the saved preference.
+- Pure policy tests cover saved on/off combined with controller connected/
+  disconnected. The clean patch chain reproduced byte-identical overlay,
+  SDL-controller, shell, and input-helper sources, and the arm64 device target
+  compiled and linked them.
+- The signed update installed and launched in place on the iPhone 14 and iPad
+  Pro 12.9-inch. Both live `BarrelPad.app/BarrelPad` processes booted the local
+  ROM with widescreen enabled. Pre/post ROM and EEPROM SHA-256 values matched,
+  and each full save directory compared without differences.
+- No physical controller was connected during this deployment. Real hardware
+  Player 1 takeover and disconnect restoration remain a hands-on acceptance
+  check; the implementation and event route are present, but not mislabeled as
+  physically exercised.
+
 ## 2026-08-07 — BarrelPad physical-device acceptance
 
 - Product/bundle: `BarrelPad.app`, executable `BarrelPad`, bundle identifier
   `com.chrissotraidis.barrelpad`.
 - iPhone 14: signed install and launch pass; Apple A15 WebGPU adapter; native
-  `2532×1170` drawable; touch overlay and virtual P1 controller initialized;
+  `2532×1170` drawable; touch overlay and direct P1 input initialized;
   US 1.1 ROM verified and game boot entered.
 - iPad Pro 12.9-inch: signed install and launch pass; Apple M2 WebGPU adapter;
   native `2732×2048` drawable; existing tablet layout retained; ROM verified

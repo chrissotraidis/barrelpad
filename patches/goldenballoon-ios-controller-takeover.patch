@@ -1,0 +1,73 @@
+diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
+index 68b00cc..7627c01 100644
+--- a/platform/platform_sdl_min.c
++++ b/platform/platform_sdl_min.c
+@@ -371,6 +371,7 @@ static struct pad_state s_browserTouchSource;
+ static void input_capture_live(uint64_t target_tick);
+ 
+ static SDL_GameController *s_gc[DKR_MAXPADS] = { NULL, NULL, NULL, NULL };
++static Uint8 s_gcIsVirtual[DKR_MAXPADS] = { 0, 0, 0, 0 };
+ /* DKR's current motor request per port. Kept separate from the user mute/profile
+  * so a live preference change can stop or refresh an already-running effect. */
+ static Uint8 s_rumbleRequested[DKR_MAXPADS] = { 0, 0, 0, 0 };
+@@ -1301,10 +1302,32 @@ static void platform_dump_frame(void) {
+ }
+ 
+ /* ---- Game controller open/close ----------------------------------------- */
++#if defined(__APPLE__)
++extern __attribute__((weak)) void
++platform_ios_physical_controller_changed(int connected);
++
++static void ios_notify_physical_controller_state(void) {
++    int connected = 0;
++    for (int i = 0; i < DKR_MAXPADS; ++i) {
++        if (s_gc[i] != NULL && !s_gcIsVirtual[i]) {
++            connected = 1;
++            break;
++        }
++    }
++    if (platform_ios_physical_controller_changed != NULL) {
++        platform_ios_physical_controller_changed(connected);
++    }
++}
++#endif
++
+ static void gc_try_open(int deviceIndex) {
+     if (!SDL_IsGameController(deviceIndex)) return;
+     for (int i = 0; i < DKR_MAXPADS; i++) {
+         if (!s_gc[i]) {
++            s_gcIsVirtual[i] = 0;
++#if SDL_VERSION_ATLEAST(2, 0, 14)
++            s_gcIsVirtual[i] = SDL_JoystickIsVirtual(deviceIndex) ? 1 : 0;
++#endif
+             s_gc[i] = SDL_GameControllerOpen(deviceIndex);
+             if (s_gc[i]) {
+                 s_rumbleSupported[i] = -1;
+@@ -1313,6 +1336,11 @@ static void gc_try_open(int deviceIndex) {
+                        sizeof(s_controllerSource[i]));
+                 printf("[SDL] gamepad P%d: %s\n", i + 1,
+                        SDL_GameControllerName(s_gc[i]));
++#if defined(__APPLE__)
++                ios_notify_physical_controller_state();
++#endif
++            } else {
++                s_gcIsVirtual[i] = 0;
+             }
+             return;
+         }
+@@ -1329,11 +1357,15 @@ static void gc_close_instance(SDL_JoystickID which) {
+                 (void)platform_pad_rumble(i, 0);
+                 SDL_GameControllerClose(s_gc[i]);
+                 s_gc[i] = NULL;
++                s_gcIsVirtual[i] = 0;
+                 s_rumbleSupported[i] = -1;
+                 s_rumbleRequested[i] = 0;
+                 memset(&s_controllerSource[i], 0,
+                        sizeof(s_controllerSource[i]));
+                 printf("[SDL] gamepad P%d disconnected\n", i + 1);
++#if defined(__APPLE__)
++                ios_notify_physical_controller_state();
++#endif
+                 return;
+             }
+         }

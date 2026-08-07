@@ -52,6 +52,17 @@ static void test_layout_kind(void) {
            "iPad is tablet");
 }
 
+static void test_touch_controller_takeover(void) {
+    EXPECT(BarrelPad_GameplayTouchEnabled(true, false),
+           "saved-on touch is visible without a controller");
+    EXPECT(!BarrelPad_GameplayTouchEnabled(true, true),
+           "physical controller temporarily hides gameplay touch");
+    EXPECT(!BarrelPad_GameplayTouchEnabled(false, false),
+           "saved-off touch stays hidden without a controller");
+    EXPECT(!BarrelPad_GameplayTouchEnabled(false, true),
+           "saved-off touch stays hidden with a controller");
+}
+
 static void test_default_layouts(void) {
     BarrelPadControlSpec specs[20];
     int nPhone = BarrelPad_DefaultLayout(kBarrelPadLayoutPhone, specs, 20);
@@ -138,6 +149,7 @@ int main(void) {
     test_stick_up_is_positive_y();
     test_stick_clamp();
     test_layout_kind();
+    test_touch_controller_takeover();
     test_default_layouts();
     test_safe_area();
     test_host_key_tokens_dkr();
