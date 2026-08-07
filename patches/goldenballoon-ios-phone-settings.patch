@@ -40,7 +40,7 @@ index d9139e4..5012013 100644
  void SectionHeader(const char *title, const char *subtitle);
  void RestartBadge();                                 // non-interactive muted chip
 diff --git a/platform/app/ui_overlay.cpp b/platform/app/ui_overlay.cpp
-index 8d0c70b..dafeca0 100644
+index 8d0c70b..f8ca771 100644
 --- a/platform/app/ui_overlay.cpp
 +++ b/platform/app/ui_overlay.cpp
 @@ -45,6 +45,7 @@ extern "C" void  gfx_webgpu_current_overlay_size(int *w, int *h);
@@ -82,50 +82,80 @@ index 8d0c70b..dafeca0 100644
          SDL_SetRelativeMouseMode(g_overlay.previousRelativeMouse ? SDL_TRUE : SDL_FALSE);
      }
      if (platform_ios_touch_menu_visible) {
-@@ -481,12 +492,22 @@ void positionOverlayWindow(const ImGuiViewport &viewport, float uiScale) {
+@@ -481,15 +492,40 @@ void positionOverlayWindow(const ImGuiViewport &viewport, float uiScale) {
      float width = (g_overlay.showSettings ? 720.0f : 560.0f) * uiScale;
      float height = (confirming ? 250.0f : (g_overlay.showSettings ? 560.0f : 300.0f))
                     * uiScale;
 +#if defined(__APPLE__) && TARGET_OS_IOS
-+    const bool phoneSettings = g_overlay.showSettings && viewport.Size.y < 560.0f;
-+    if (phoneSettings) {
-+        // The settings task needs the whole short landscape phone canvas, not
-+        // a desktop-sized window clipped to it.
++    const bool phoneViewport = viewport.Size.y < 560.0f;
++    if (confirming) {
++        width = std::min(viewport.Size.x - 24.0f,
++                         phoneViewport ? 720.0f : 760.0f);
++        height = std::min(viewport.Size.y - 24.0f,
++                          phoneViewport ? 260.0f : 280.0f);
++    } else if (phoneViewport && g_overlay.showSettings) {
++        // The editor and full settings need the short phone canvas. This is
++        // the full-height treatment already proven usable on the device.
 +        width = viewport.Size.x - 16.0f;
 +        height = viewport.Size.y - 16.0f;
++    } else if (phoneViewport) {
++        // Keep the pause sheet compact enough to leave the game visible, but
++        // size it independently from the player's UI scale so it cannot clip.
++        width = std::min(viewport.Size.x - 24.0f, 720.0f);
++        height = std::min(viewport.Size.y - 24.0f, 340.0f);
++    } else if (g_overlay.showSettings) {
++        // iPad has room for a useful settings canvas; the old scaled desktop
++        // size made the panel unnecessarily small at the iPad default scale.
++        width = std::min(viewport.Size.x - 32.0f, 780.0f);
++        height = std::min(viewport.Size.y - 32.0f, 600.0f);
++    } else {
++        // A balanced iPad pause card: large enough to read and deliberately
++        // laid out, without covering the whole game.
++        width = std::min(viewport.Size.x - 40.0f, 760.0f);
++        height = std::min(viewport.Size.y - 40.0f, 410.0f);
 +    }
 +#endif
      if (width > viewport.Size.x) width = viewport.Size.x;
      if (height > viewport.Size.y) height = viewport.Size.y;
- #if defined(__APPLE__) && TARGET_OS_IOS
+-#if defined(__APPLE__) && TARGET_OS_IOS
 -    /* iPad: sit the panel a little higher so it never reaches the bottom-left
 -     * analog-stick zone; the touch controls hide while it is open anyway. */
 -    const float overlayCenterY = 0.42f;
-+    /* A phone-height panel must remain entirely on-screen. On larger iPads,
-+     * retain the slightly raised composition. */
-+    const float overlayCenterY =
-+        viewport.Size.y < 560.0f * uiScale ? 0.5f : 0.42f;
- #else
+-#else
++    // Center every sheet. The previous raised iPad composition made the card
++    // feel detached and could crop its title once UI scale was increased.
      const float overlayCenterY = 0.5f;
- #endif
-@@ -498,6 +519,16 @@ void positionOverlayWindow(const ImGuiViewport &viewport, float uiScale) {
+-#endif
+     ImGui::SetNextWindowPos(
+         ImVec2(viewport.Pos.x + viewport.Size.x * 0.5f,
+                viewport.Pos.y + viewport.Size.y * overlayCenterY),
+@@ -498,6 +534,25 @@ void positionOverlayWindow(const ImGuiViewport &viewport, float uiScale) {
  }
  
  void drawOverlayHeader() {
 +#if defined(__APPLE__) && TARGET_OS_IOS
-+    const ImGuiViewport *viewport = ImGui::GetMainViewport();
-+    if (g_overlay.showSettings && viewport && viewport->Size.y < 560.0f) {
-+        ImGui::PushFont(AppTheme::fonts().title);
-+        ImGui::TextUnformatted("Settings");
-+        ImGui::PopFont();
++    // Mobile never needs keyboard or desktop instructions. A short, stable
++    // header also leaves the same usable content area on iPhone and iPad.
++    ImGui::PushFont(AppTheme::fonts().title);
++    ImGui::TextUnformatted(
++        g_overlay.confirm != ConfirmAction::None
++            ? "Confirm" : (g_overlay.showSettings ? "Settings" : "Paused"));
++    ImGui::PopFont();
++    if (!g_overlay.showSettings) {
 +        ui::Gap(ui::kGapXS);
-+        return;
++        ui::TextSubtleWrapped("Tap Resume to continue");
++        ui::Gap(ui::kGapS);
++        ImGui::Separator();
++        ui::Gap(ui::kGapM);
++    } else {
++        ui::Gap(ui::kGapXS);
 +    }
++    return;
 +#endif
      ImGui::PushFont(AppTheme::fonts().title);
      ImGui::PushStyleColor(ImGuiCol_Text, AppTheme::accent());
      ImGui::TextUnformatted(MDKR_BRAND_NAME);
-@@ -569,34 +600,148 @@ void drawConfirmation(float uiScale) {
+@@ -569,34 +624,172 @@ void drawConfirmation(float uiScale) {
      }
  }
  
@@ -186,6 +216,41 @@ index 8d0c70b..dafeca0 100644
 +#if defined(__APPLE__) && TARGET_OS_IOS
 +    const bool phoneViewport = ImGui::GetMainViewport()->Size.y < 560.0f;
 +    const bool phoneSettings = g_overlay.showSettings && phoneViewport;
++
++    if (!g_overlay.showSettings) {
++        // Mobile pause menu: one clear primary action, two equal destinations,
++        // and one safe exit. Avoid desktop-only Quit and the old orphaned
++        // half-width All Settings button.
++        const float contentWidth = ImGui::GetContentRegionAvail().x;
++        if (ui::PrimaryButton(
++                "Resume", ImVec2(contentWidth, ui::kBtnPrimary().y))) {
++            setOpen(false);
++        }
++
++        ui::Gap(ui::kGapS);
++        const float spacing = ImGui::GetStyle().ItemSpacing.x;
++        const float destinationWidth = (contentWidth - spacing) * 0.5f;
++        const ImVec2 destinationSize(destinationWidth, ui::kBtnSecondary().y);
++        if (ImGui::Button("Touch Controls", destinationSize)) {
++            g_overlay.showSettings = true;
++            g_overlay.allSettings = false;
++            g_overlay.resetSettingsScroll = false;
++        }
++        ImGui::SameLine();
++        if (ImGui::Button("All Settings", destinationSize)) {
++            g_overlay.showSettings = true;
++            g_overlay.allSettings = true;
++            g_overlay.resetSettingsScroll = true;
++        }
++
++        ui::Gap(ui::kGapS);
++        if (ImGui::Button(
++                "Return to Launcher",
++                ImVec2(contentWidth, ui::kBtnSecondary().y))) {
++            g_overlay.confirm = ConfirmAction::ReturnToLauncher;
++        }
++        return;
++    }
 +#else
 +    const bool phoneSettings = false;
 +#endif
@@ -211,17 +276,6 @@ index 8d0c70b..dafeca0 100644
 -        g_overlay.showSettings = !g_overlay.showSettings;
      }
  
-+#if defined(__APPLE__) && TARGET_OS_IOS
-+    if (!g_overlay.showSettings) {
-+        ui::Gap(ui::kGapXS);
-+        if (ImGui::Button("All Settings", ui::kBtnWide())) {
-+            g_overlay.showSettings = true;
-+            g_overlay.allSettings = true;
-+            g_overlay.resetSettingsScroll = true;
-+        }
-+    }
-+#endif
-+
      if (g_overlay.showSettings) {
          ui::Gap(ui::kGapS);
 -        ImGui::BeginChild("##ovsettings", ImVec2(0, 340 * uiScale), true);
