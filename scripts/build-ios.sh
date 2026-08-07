@@ -90,5 +90,15 @@ if [ ! -f "$APP/Info.plist" ]; then
 PLIST
 fi
 
+# Xcode's asset compiler turns the checked-in universal AppIcon catalog into
+# the Assets.car used by modern iOS and iPadOS launchers.
+actool --compile "$APP" \
+  --platform iphonesimulator \
+  --minimum-deployment-target 15.0 \
+  --app-icon AppIcon \
+  --output-partial-info-plist "$BUILD/AppIcon-Info.plist" \
+  "$ROOT/ios/Assets.xcassets"
+/usr/libexec/PlistBuddy -c "Merge $BUILD/AppIcon-Info.plist" "$APP/Info.plist"
+
 echo "[ChimpPad] Simulator app ($FAMILY): $APP"
 echo "$APP" > "$BUILD/last-app-path.txt"
