@@ -1,14 +1,14 @@
 # Architecture
 
-## What ChimpPad is
+## What BarrelPad is
 
-ChimpPad is a native macOS, iPhone, and iPad shell for **Diddy Kong Racing**,
+BarrelPad is a native macOS, iPhone, and iPad shell for **Diddy Kong Racing**,
 built around the open-source [Golden Balloon](https://github.com/akratch/goldenballoon)
 native port (which itself is built from the
 [Diddy Kong Racing decompilation](https://github.com/davidsm64/diddy-kong-racing)).
 
 It is **not** an emulator shell of the decomp ROM rebuild. Game logic runs as
-compiled host code (the Golden Balloon / `mdkr64` engine). ChimpPad supplies:
+compiled host code (the Golden Balloon / `mdkr64` engine). BarrelPad supplies:
 
 - Apple platform packaging and lifecycle
 - ROM discovery and legal boundary (local ROM only; never redistributed)
@@ -20,7 +20,7 @@ compiled host code (the Golden Balloon / `mdkr64` engine). ChimpPad supplies:
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  ChimpPad shell (this repo: ios/, macos/, scripts/, docs/)  │
+│  BarrelPad shell (this repo: ios/, macos/, scripts/, docs/)  │
 │  • lifecycle, logging, ROM path, touch overlay, layouts     │
 └───────────────────────────┬─────────────────────────────────┘
                             │ SDL2 window / virtual controller
@@ -40,7 +40,7 @@ compiled host code (the Golden Balloon / `mdkr64` engine). ChimpPad supplies:
 | Reference | Role |
 |---|---|
 | `ref/spaghettipad` | Primary **Apple-port** pattern book: shell lifecycle, virtual controller, touch quality, safe areas, phone/tablet layouts, README structure, build-script shape. **Not** MK64 game logic. |
-| `ref/goldenballoon` | Primary **game host**. Open MIT native port of DKR from the decomp. macOS/Linux/Windows/browser already; ChimpPad extends Apple mobile packaging and touch. |
+| `ref/goldenballoon` | Primary **game host**. Open MIT native port of DKR from the decomp. macOS/Linux/Windows/browser already; BarrelPad extends Apple mobile packaging and touch. |
 | `ref/diddy-kong-racing` | Upstream matching decompilation. Used for control semantics research and future decomp sync; **not** the runtime host (it rebuilds an N64 ROM via IDO/MIPS). |
 
 ## Why not pure decomp-as-host?
@@ -65,7 +65,7 @@ DKR N64 pad usage (racing-focused):
 | C-buttons | Camera / map interactions |
 | Start | Pause / start |
 
-ChimpPad maps touch controls to these via SDL virtual joystick + keyboard
+BarrelPad maps touch controls to these via SDL virtual joystick + keyboard
 fallback, adapted from SpaghettiPad’s emission path but **without** Mario Kart
 item/hold semantics (no MK64 item-double-Z assumptions; A-hold assist is
 optional and DKR-tuned).
@@ -77,11 +77,13 @@ optional and DKR-tuned).
 | macOS (Apple silicon) | WebGPU (wgpu-native Metal) default; OpenGL diagnostic | Golden Balloon qualified path |
 | iPhone Simulator | OpenGL ES / Metal via SDL2 as available | One Simulator at a time |
 | iPad Simulator | Same as iPhone | Tablet touch layout |
+| Physical iPhone | WebGPU via Metal | Native widescreen; compact accepted touch default |
+| Physical iPad | WebGPU via Metal | Existing tablet rail default |
 
 ## Repository layout
 
 ```text
-chimppad/
+barrelpad/
   README.md
   docs/                 # first-class handoff documentation
   ios/                  # iOS/iPadOS shell + touch
@@ -98,6 +100,6 @@ chimppad/
 
 ## Logging
 
-Runtime logging uses `os_log` / `NSLog` / SDL log with a stable `[ChimpPad]`
+Runtime logging uses `os_log` / `NSLog` / SDL log with a stable `[BarrelPad]`
 prefix. Enable verbose logs during smoke tests; capture under agent scratch
 and summarize in `docs/evidence/`.

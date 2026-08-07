@@ -6,7 +6,7 @@ index 814753b..ae6ada6 100644
  project(mdkr64 C)
  include(CTest)
  option(MDKR_BUILD_FUZZERS "Build coverage-guided save-format fuzzers" OFF)
-+option(MDKR_IOS_SIMULATOR "ChimpPad: select iOS Simulator wgpu-native prebuilt" OFF)
++option(MDKR_IOS_SIMULATOR "BarrelPad: select iOS Simulator wgpu-native prebuilt" OFF)
  
  # The launcher smoke tests share one physical graphics device and their isolated
  # files do not make concurrent GPU context creation safe.  Apply one named CTest
@@ -16,7 +16,7 @@ index 814753b..ae6ada6 100644
      pkg_check_modules(SDL2 REQUIRED sdl2)
 -    if(APPLE)
 +    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-+        # ChimpPad iOS: WebGPU-only (no desktop OpenGL framework).
++        # BarrelPad iOS: WebGPU-only (no desktop OpenGL framework).
 +        set(MDKR_IOS 1)
 +        set(OPENGL_LIB "")
 +    elseif(APPLE)
@@ -29,12 +29,12 @@ index 814753b..ae6ada6 100644
      ${CMAKE_SOURCE_DIR}/platform/fast3d/gfx_webgpu_shader.c)
 -if(EMSCRIPTEN)
 +if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
-+    # ChimpPad iOS: WebGPU-only (desktop GL backend is not GLES-compatible).
++    # BarrelPad iOS: WebGPU-only (desktop GL backend is not GLES-compatible).
      list(REMOVE_ITEM FAST3D_SOURCES ${CMAKE_SOURCE_DIR}/platform/fast3d/gfx_opengl.c)
  endif()
 +if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
 +    list(APPEND PLATFORM_SOURCES ${CMAKE_SOURCE_DIR}/platform/gfx_opengl_ios_stub.c)
-+    list(APPEND PLATFORM_SOURCES ${CMAKE_SOURCE_DIR}/platform/chimppad_ios_main.c)
++    list(APPEND PLATFORM_SOURCES ${CMAKE_SOURCE_DIR}/platform/barrelpad_ios_main.c)
 +endif()
  if(MDKR_WEBGPU_BACKEND)
      list(APPEND FAST3D_SOURCES
@@ -63,8 +63,8 @@ index 814753b..ae6ada6 100644
 +            "-framework OpenGLES"
 +            SDL2main)
 +        # iOS needs SDL_main entry; do not use SDL_MAIN_HANDLED for the final binary.
-+        target_compile_definitions(${MDKR_TARGET} PRIVATE CHIMPPAD_IOS=1)
-+        target_include_directories(${MDKR_TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/platform/chimppad)
++        target_compile_definitions(${MDKR_TARGET} PRIVATE BARRELPAD_IOS=1)
++        target_include_directories(${MDKR_TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/platform/barrelpad)
 +    elseif(APPLE)
          target_link_libraries(${MDKR_TARGET} PRIVATE ${OPENGL_LIB})
      else()
@@ -83,9 +83,9 @@ index 814753b..ae6ada6 100644
 +            enable_language(OBJCXX)
 +            list(APPEND APP_SOURCES
 +                ${CMAKE_SOURCE_DIR}/platform/app/file_dialog_stub.cpp
-+                ${CMAKE_SOURCE_DIR}/platform/chimppad/ChimpPadShell.mm
-+                ${CMAKE_SOURCE_DIR}/platform/chimppad/ChimpPadInput.c
-+                ${CMAKE_SOURCE_DIR}/platform/chimppad/ChimpPadRomBoot.mm)
++                ${CMAKE_SOURCE_DIR}/platform/barrelpad/BarrelPadShell.mm
++                ${CMAKE_SOURCE_DIR}/platform/barrelpad/BarrelPadInput.c
++                ${CMAKE_SOURCE_DIR}/platform/barrelpad/BarrelPadRomBoot.mm)
          elseif(WIN32)
              list(APPEND APP_SOURCES ${CMAKE_SOURCE_DIR}/platform/app/file_dialog_win.cpp)
          else()
@@ -94,7 +94,7 @@ index 814753b..ae6ada6 100644
  
          add_library(mdkr64_app STATIC ${IMGUI_SOURCES} ${APP_SOURCES})
 +        target_include_directories(mdkr64_app PRIVATE
-+            ${CMAKE_SOURCE_DIR}/platform/chimppad)
++            ${CMAKE_SOURCE_DIR}/platform/barrelpad)
 +
 +        if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
 +            target_compile_definitions(mdkr64_app PRIVATE GLES_SILENCE_DEPRECATION GL_SILENCE_DEPRECATION)
@@ -173,7 +173,7 @@ index b10af08..c764c03 100644
              set(_supported FALSE)
          endif()
 +    elseif(os STREQUAL "iOS" AND _abi STREQUAL "apple")
-+        # ChimpPad: iOS Simulator prebuilts from wgpu-native v29.0.1.1
++        # BarrelPad: iOS Simulator prebuilts from wgpu-native v29.0.1.1
 +        if(DEFINED MDKR_IOS_SIMULATOR AND MDKR_IOS_SIMULATOR)
 +            if(_cpu MATCHES "^(arm64|aarch64)$")
 +                set(_asset "wgpu-ios-aarch64-simulator-release.zip")
@@ -213,7 +213,7 @@ index 055d0d2..4985cb1 100644
 +#if defined(__APPLE__)
 +#include <TargetConditionals.h>
 +#if TARGET_OS_IOS
-+#include "ChimpPadTouchControls.h"
++#include "BarrelPadTouchControls.h"
 +#endif
 +#endif
  #include "fs_utf8.h"
@@ -257,9 +257,9 @@ index 055d0d2..4985cb1 100644
      io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
      AppTheme::setup(framebufferScale());
 +#if defined(__APPLE__) && TARGET_OS_IOS
-+    ChimpPad_OnWindowCreated(window_);
-+    ChimpPad_InitializeTouchControls();
-+    ChimpPad_SetGameplayActive(1);
++    BarrelPad_OnWindowCreated(window_);
++    BarrelPad_InitializeTouchControls();
++    BarrelPad_SetGameplayActive(1);
 +#endif
 +
      if (!ImGui_ImplSDL2_InitForOpenGL(window_, gl_)) {
@@ -270,10 +270,10 @@ index 055d0d2..4985cb1 100644
      }
      std::fprintf(stderr, "[app] host: WebGPU (%dx%d drawable, format=%d)\n", dw, dh, fmt);
 +#if defined(__APPLE__) && TARGET_OS_IOS
-+    ChimpPad_OnWindowCreated(window_);
-+    ChimpPad_InitializeTouchControls();
-+    ChimpPad_SetGameplayActive(1);
-+    std::fprintf(stderr, "[ChimpPad] touch controls initialized (WebGPU path)\n");
++    BarrelPad_OnWindowCreated(window_);
++    BarrelPad_InitializeTouchControls();
++    BarrelPad_SetGameplayActive(1);
++    std::fprintf(stderr, "[BarrelPad] touch controls initialized (WebGPU path)\n");
 +#endif
      return true;
  }
@@ -314,7 +314,7 @@ index fbc11ac..cfdb5cc 100644
      if (mdkr_argv_requests_ui(argc, argv)) return 0;
  
 +#if defined(__APPLE__) && TARGET_OS_IOS
-+    /* ChimpPad: interactive UI + touch overlay are required on iOS. Only
++    /* BarrelPad: interactive UI + touch overlay are required on iOS. Only
 +     * explicit headless automation flags skip the shell. */
 +    if (!mdkr_argv_requests_headless(argc, argv)) return 0;
 +#endif
@@ -333,7 +333,7 @@ index 2e85652..6e4c48d 100644
 +#if defined(__APPLE__)
 +#include <TargetConditionals.h>
 +#if TARGET_OS_IOS
-+#include "ChimpPadRomBoot.h"
++#include "BarrelPadRomBoot.h"
 +#endif
 +#endif
  #include "app_relaunch.h"
@@ -344,26 +344,26 @@ index 2e85652..6e4c48d 100644
      }
  
 +#if defined(__APPLE__) && TARGET_OS_IOS
-+    /* ChimpPad: Documents ROM / MDKR_ROM → game boot with AppHost + touch. */
-+    (void)ChimpPad_PrepareIosRomBoot();
++    /* BarrelPad: Documents ROM / MDKR_ROM → game boot with AppHost + touch. */
++    (void)BarrelPad_PrepareIosRomBoot();
 +#endif
 +
      // Non-interactive schema self-check, before any window or tee.
      if (std::getenv("MDKR_APP_DUMP_SCHEMA")) {
          return dumpSchema();
-diff --git a/platform/chimppad/ChimpPadInput.c b/platform/chimppad/ChimpPadInput.c
+diff --git a/platform/barrelpad/BarrelPadInput.c b/platform/barrelpad/BarrelPadInput.c
 new file mode 100644
 index 0000000..4d3bfdb
 --- /dev/null
-+++ b/platform/chimppad/ChimpPadInput.c
++++ b/platform/barrelpad/BarrelPadInput.c
 @@ -0,0 +1,348 @@
-+#include "ChimpPadInput.h"
++#include "BarrelPadInput.h"
 +
 +#include <math.h>
 +#include <string.h>
 +
-+#ifndef CHIMPPAD_PI
-+#define CHIMPPAD_PI 3.14159265358979323846f
++#ifndef BARRELPAD_PI
++#define BARRELPAD_PI 3.14159265358979323846f
 +#endif
 +
 +static float clampf(float v, float lo, float hi) {
@@ -376,8 +376,8 @@ index 0000000..4d3bfdb
 +    return v;
 +}
 +
-+ChimpPadStickState ChimpPad_StickFromTouch(float dx, float dy, float radius) {
-+    ChimpPadStickState s = {0.f, 0.f};
++BarrelPadStickState BarrelPad_StickFromTouch(float dx, float dy, float radius) {
++    BarrelPadStickState s = {0.f, 0.f};
 +    if (radius <= 1.f) {
 +        return s;
 +    }
@@ -402,7 +402,7 @@ index 0000000..4d3bfdb
 +    return s;
 +}
 +
-+void ChimpPad_StickToN64(ChimpPadStickState s, int8_t *outX, int8_t *outY) {
++void BarrelPad_StickToN64(BarrelPadStickState s, int8_t *outX, int8_t *outY) {
 +    /* Golden Balloon scales SDL ±32767 → approx ±80; we match ±80 directly. */
 +    float x = clampf(s.x, -1.f, 1.f) * 80.f;
 +    float y = clampf(s.y, -1.f, 1.f) * 80.f;
@@ -414,8 +414,8 @@ index 0000000..4d3bfdb
 +    }
 +}
 +
-+ChimpPadLayoutRect ChimpPad_SafeAreaBounds(ChimpPadSafeArea safe) {
-+    ChimpPadLayoutRect r;
++BarrelPadLayoutRect BarrelPad_SafeAreaBounds(BarrelPadSafeArea safe) {
++    BarrelPadLayoutRect r;
 +    r.x = safe.left;
 +    r.y = safe.top;
 +    r.w = safe.width - safe.left - safe.right;
@@ -429,18 +429,18 @@ index 0000000..4d3bfdb
 +    return r;
 +}
 +
-+ChimpPadLayoutKind ChimpPad_LayoutKindForSize(float width, float height) {
++BarrelPadLayoutKind BarrelPad_LayoutKindForSize(float width, float height) {
 +    float shortSide = width < height ? width : height;
 +    /* iPad mini short side ~744 pt; phones ≤ 500 pt short side landscape height. */
 +    if (shortSide >= 600.f) {
-+        return kChimpPadLayoutTablet;
++        return kBarrelPadLayoutTablet;
 +    }
-+    return kChimpPadLayoutPhone;
++    return kBarrelPadLayoutPhone;
 +}
 +
-+ChimpPadLayoutRect ChimpPad_AbsoluteRect(ChimpPadLayoutRect bounds,
-+                                         ChimpPadLayoutRect normalized) {
-+    ChimpPadLayoutRect r;
++BarrelPadLayoutRect BarrelPad_AbsoluteRect(BarrelPadLayoutRect bounds,
++                                         BarrelPadLayoutRect normalized) {
++    BarrelPadLayoutRect r;
 +    r.x = bounds.x + normalized.x * bounds.w;
 +    r.y = bounds.y + normalized.y * bounds.h;
 +    r.w = normalized.w * bounds.w;
@@ -448,82 +448,82 @@ index 0000000..4d3bfdb
 +    return r;
 +}
 +
-+const char *ChimpPad_ActionLabel(ChimpPadAction action) {
++const char *BarrelPad_ActionLabel(BarrelPadAction action) {
 +    switch (action) {
-+        case kChimpPadActionA:
++        case kBarrelPadActionA:
 +            return "A";
-+        case kChimpPadActionB:
++        case kBarrelPadActionB:
 +            return "B";
-+        case kChimpPadActionL:
++        case kBarrelPadActionL:
 +            return "L";
-+        case kChimpPadActionR:
++        case kBarrelPadActionR:
 +            return "R";
-+        case kChimpPadActionZ:
++        case kBarrelPadActionZ:
 +            return "Z";
-+        case kChimpPadActionStart:
++        case kBarrelPadActionStart:
 +            return "Start";
-+        case kChimpPadActionDUp:
++        case kBarrelPadActionDUp:
 +            return "D-Up";
-+        case kChimpPadActionDDown:
++        case kBarrelPadActionDDown:
 +            return "D-Down";
-+        case kChimpPadActionDLeft:
++        case kBarrelPadActionDLeft:
 +            return "D-Left";
-+        case kChimpPadActionDRight:
++        case kBarrelPadActionDRight:
 +            return "D-Right";
-+        case kChimpPadActionCUp:
++        case kBarrelPadActionCUp:
 +            return "C-Up";
-+        case kChimpPadActionCDown:
++        case kBarrelPadActionCDown:
 +            return "C-Down";
-+        case kChimpPadActionCLeft:
++        case kBarrelPadActionCLeft:
 +            return "C-Left";
-+        case kChimpPadActionCRight:
++        case kBarrelPadActionCRight:
 +            return "C-Right";
-+        case kChimpPadActionMenu:
++        case kBarrelPadActionMenu:
 +            return "Menu";
 +        default:
 +            return "?";
 +    }
 +}
 +
-+const char *ChimpPad_HostKeyToken(ChimpPadAction action) {
++const char *BarrelPad_HostKeyToken(BarrelPadAction action) {
 +    /* Matches Golden Balloon platform_sdl_min.c keyboard map. */
 +    switch (action) {
-+        case kChimpPadActionA:
++        case kBarrelPadActionA:
 +            return "X"; /* accelerate */
-+        case kChimpPadActionB:
++        case kBarrelPadActionB:
 +            return "Z"; /* brake */
-+        case kChimpPadActionL:
++        case kBarrelPadActionL:
 +            return "Q";
-+        case kChimpPadActionR:
++        case kBarrelPadActionR:
 +            return "SPACE"; /* hop / slide */
-+        case kChimpPadActionZ:
++        case kBarrelPadActionZ:
 +            return "SHIFT"; /* item */
-+        case kChimpPadActionStart:
++        case kBarrelPadActionStart:
 +            return "RETURN";
-+        case kChimpPadActionCUp:
++        case kBarrelPadActionCUp:
 +            return "I";
-+        case kChimpPadActionCDown:
++        case kBarrelPadActionCDown:
 +            return "K";
-+        case kChimpPadActionCLeft:
++        case kBarrelPadActionCLeft:
 +            return "J";
-+        case kChimpPadActionCRight:
++        case kBarrelPadActionCRight:
 +            return "L";
-+        case kChimpPadActionDUp:
++        case kBarrelPadActionDUp:
 +            return "UP";
-+        case kChimpPadActionDDown:
++        case kBarrelPadActionDDown:
 +            return "DOWN";
-+        case kChimpPadActionDLeft:
++        case kBarrelPadActionDLeft:
 +            return "LEFT";
-+        case kChimpPadActionDRight:
++        case kBarrelPadActionDRight:
 +            return "RIGHT";
-+        case kChimpPadActionMenu:
++        case kBarrelPadActionMenu:
 +            return "ESCAPE";
 +        default:
 +            return "";
 +    }
 +}
 +
-+void ChimpPad_HoldAssistInit(ChimpPadHoldAssist *h, double thresholdSec) {
++void BarrelPad_HoldAssistInit(BarrelPadHoldAssist *h, double thresholdSec) {
 +    if (!h) {
 +        return;
 +    }
@@ -532,7 +532,7 @@ index 0000000..4d3bfdb
 +    h->holdThresholdSec = thresholdSec > 0.05 ? thresholdSec : 0.65;
 +}
 +
-+bool ChimpPad_HoldAssistOnA(ChimpPadHoldAssist *h, bool fingerDown, double nowSec) {
++bool BarrelPad_HoldAssistOnA(BarrelPadHoldAssist *h, bool fingerDown, double nowSec) {
 +    if (!h || !h->enabled) {
 +        return fingerDown;
 +    }
@@ -556,7 +556,7 @@ index 0000000..4d3bfdb
 +    return h->locked;
 +}
 +
-+void ChimpPad_HoldAssistForceRelease(ChimpPadHoldAssist *h) {
++void BarrelPad_HoldAssistForceRelease(BarrelPadHoldAssist *h) {
 +    if (!h) {
 +        return;
 +    }
@@ -565,8 +565,8 @@ index 0000000..4d3bfdb
 +    h->downTime = 0.0;
 +}
 +
-+int ChimpPad_DefaultLayout(ChimpPadLayoutKind kind,
-+                           ChimpPadControlSpec *outSpecs,
++int BarrelPad_DefaultLayout(BarrelPadLayoutKind kind,
++                           BarrelPadControlSpec *outSpecs,
 +                           int maxSpecs) {
 +    if (!outSpecs || maxSpecs <= 0) {
 +        return 0;
@@ -575,141 +575,141 @@ index 0000000..4d3bfdb
 +    /* Normalized rects: x,y top-left of control, w,h size relative to safe area.
 +     * Stick left; A/B/Z/R right; C cluster upper-right; Start/Menu top-right. */
 +    enum { kMax = 16 };
-+    ChimpPadControlSpec phone[kMax];
-+    ChimpPadControlSpec tablet[kMax];
++    BarrelPadControlSpec phone[kMax];
++    BarrelPadControlSpec tablet[kMax];
 +    int n = 0;
 +
 +    /* Shared skeleton; phone uses larger primary hit targets. */
-+    ChimpPadControlSpec *dst = (kind == kChimpPadLayoutTablet) ? tablet : phone;
++    BarrelPadControlSpec *dst = (kind == kBarrelPadLayoutTablet) ? tablet : phone;
 +
-+    dst[n++] = (ChimpPadControlSpec){
-+        .action = kChimpPadActionA, /* placeholder; isStick marks well */
++    dst[n++] = (BarrelPadControlSpec){
++        .action = kBarrelPadActionA, /* placeholder; isStick marks well */
 +        .label = "Stick",
 +        .rect = {.x = 0.04f, .y = 0.42f, .w = 0.22f, .h = 0.42f},
 +        .isStick = true,
 +    };
-+    dst[n++] = (ChimpPadControlSpec){
-+        .action = kChimpPadActionL,
++    dst[n++] = (BarrelPadControlSpec){
++        .action = kBarrelPadActionL,
 +        .label = "L",
 +        .rect = {.x = 0.04f, .y = 0.18f, .w = 0.09f, .h = 0.12f},
 +        .isStick = false,
 +    };
-+    dst[n++] = (ChimpPadControlSpec){
-+        .action = kChimpPadActionZ,
++    dst[n++] = (BarrelPadControlSpec){
++        .action = kBarrelPadActionZ,
 +        .label = "Z",
 +        .rect = {.x = 0.15f, .y = 0.18f, .w = 0.09f, .h = 0.12f},
 +        .isStick = false,
 +    };
 +
-+    if (kind == kChimpPadLayoutPhone) {
++    if (kind == kBarrelPadLayoutPhone) {
 +        /* Enlarged A / B / R for thumb reach (DKR accelerate / brake / hop). */
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionA,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionA,
 +            .label = "A",
 +            .rect = {.x = 0.72f, .y = 0.52f, .w = 0.14f, .h = 0.22f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionB,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionB,
 +            .label = "B",
 +            .rect = {.x = 0.58f, .y = 0.58f, .w = 0.12f, .h = 0.18f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionR,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionR,
 +            .label = "R",
 +            .rect = {.x = 0.78f, .y = 0.30f, .w = 0.12f, .h = 0.14f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionCUp,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionCUp,
 +            .label = "C↑",
 +            .rect = {.x = 0.70f, .y = 0.14f, .w = 0.07f, .h = 0.09f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionCDown,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionCDown,
 +            .label = "C↓",
 +            .rect = {.x = 0.70f, .y = 0.28f, .w = 0.07f, .h = 0.09f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionCLeft,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionCLeft,
 +            .label = "C←",
 +            .rect = {.x = 0.62f, .y = 0.21f, .w = 0.07f, .h = 0.09f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionCRight,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionCRight,
 +            .label = "C→",
 +            .rect = {.x = 0.78f, .y = 0.21f, .w = 0.07f, .h = 0.09f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionStart,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionStart,
 +            .label = "Start",
 +            .rect = {.x = 0.86f, .y = 0.06f, .w = 0.10f, .h = 0.08f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionMenu,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionMenu,
 +            .label = "•••",
 +            .rect = {.x = 0.86f, .y = 0.00f, .w = 0.10f, .h = 0.06f},
 +        };
 +    } else {
 +        /* Tablet: more margin, slightly larger C cluster. */
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionA,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionA,
 +            .label = "A",
 +            .rect = {.x = 0.78f, .y = 0.50f, .w = 0.12f, .h = 0.20f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionB,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionB,
 +            .label = "B",
 +            .rect = {.x = 0.66f, .y = 0.56f, .w = 0.10f, .h = 0.16f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionR,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionR,
 +            .label = "R",
 +            .rect = {.x = 0.82f, .y = 0.28f, .w = 0.10f, .h = 0.12f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionCUp,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionCUp,
 +            .label = "C↑",
 +            .rect = {.x = 0.74f, .y = 0.16f, .w = 0.06f, .h = 0.08f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionCDown,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionCDown,
 +            .label = "C↓",
 +            .rect = {.x = 0.74f, .y = 0.28f, .w = 0.06f, .h = 0.08f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionCLeft,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionCLeft,
 +            .label = "C←",
 +            .rect = {.x = 0.67f, .y = 0.22f, .w = 0.06f, .h = 0.08f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionCRight,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionCRight,
 +            .label = "C→",
 +            .rect = {.x = 0.81f, .y = 0.22f, .w = 0.06f, .h = 0.08f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionStart,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionStart,
 +            .label = "Start",
 +            .rect = {.x = 0.88f, .y = 0.08f, .w = 0.08f, .h = 0.07f},
 +        };
-+        dst[n++] = (ChimpPadControlSpec){
-+            .action = kChimpPadActionMenu,
++        dst[n++] = (BarrelPadControlSpec){
++            .action = kBarrelPadActionMenu,
 +            .label = "•••",
 +            .rect = {.x = 0.88f, .y = 0.01f, .w = 0.08f, .h = 0.06f},
 +        };
 +        /* Enlarge stick well slightly on tablet. */
-+        dst[0].rect = (ChimpPadLayoutRect){.x = 0.05f, .y = 0.40f, .w = 0.20f, .h = 0.40f};
-+        dst[1].rect = (ChimpPadLayoutRect){.x = 0.05f, .y = 0.20f, .w = 0.08f, .h = 0.10f};
-+        dst[2].rect = (ChimpPadLayoutRect){.x = 0.15f, .y = 0.20f, .w = 0.08f, .h = 0.10f};
++        dst[0].rect = (BarrelPadLayoutRect){.x = 0.05f, .y = 0.40f, .w = 0.20f, .h = 0.40f};
++        dst[1].rect = (BarrelPadLayoutRect){.x = 0.05f, .y = 0.20f, .w = 0.08f, .h = 0.10f};
++        dst[2].rect = (BarrelPadLayoutRect){.x = 0.15f, .y = 0.20f, .w = 0.08f, .h = 0.10f};
 +    }
 +
 +    int count = n < maxSpecs ? n : maxSpecs;
-+    memcpy(outSpecs, dst, (size_t)count * sizeof(ChimpPadControlSpec));
++    memcpy(outSpecs, dst, (size_t)count * sizeof(BarrelPadControlSpec));
 +    return count;
 +}
-diff --git a/platform/chimppad/ChimpPadInput.h b/platform/chimppad/ChimpPadInput.h
+diff --git a/platform/barrelpad/BarrelPadInput.h b/platform/barrelpad/BarrelPadInput.h
 new file mode 100644
 index 0000000..65ddea8
 --- /dev/null
-+++ b/platform/chimppad/ChimpPadInput.h
++++ b/platform/barrelpad/BarrelPadInput.h
 @@ -0,0 +1,110 @@
 +#pragma once
 +
@@ -721,111 +721,111 @@ index 0000000..65ddea8
 +#endif
 +
 +/* DKR / N64 virtual pad actions exposed to touch and tests. */
-+typedef enum ChimpPadAction {
-+    kChimpPadActionA = 0,
-+    kChimpPadActionB,
-+    kChimpPadActionL,
-+    kChimpPadActionR,
-+    kChimpPadActionZ,
-+    kChimpPadActionStart,
-+    kChimpPadActionDUp,
-+    kChimpPadActionDDown,
-+    kChimpPadActionDLeft,
-+    kChimpPadActionDRight,
-+    kChimpPadActionCUp,
-+    kChimpPadActionCDown,
-+    kChimpPadActionCLeft,
-+    kChimpPadActionCRight,
-+    kChimpPadActionMenu,
-+    kChimpPadActionCount
-+} ChimpPadAction;
++typedef enum BarrelPadAction {
++    kBarrelPadActionA = 0,
++    kBarrelPadActionB,
++    kBarrelPadActionL,
++    kBarrelPadActionR,
++    kBarrelPadActionZ,
++    kBarrelPadActionStart,
++    kBarrelPadActionDUp,
++    kBarrelPadActionDDown,
++    kBarrelPadActionDLeft,
++    kBarrelPadActionDRight,
++    kBarrelPadActionCUp,
++    kBarrelPadActionCDown,
++    kBarrelPadActionCLeft,
++    kBarrelPadActionCRight,
++    kBarrelPadActionMenu,
++    kBarrelPadActionCount
++} BarrelPadAction;
 +
-+typedef enum ChimpPadLayoutKind {
-+    kChimpPadLayoutPhone = 0,
-+    kChimpPadLayoutTablet = 1
-+} ChimpPadLayoutKind;
++typedef enum BarrelPadLayoutKind {
++    kBarrelPadLayoutPhone = 0,
++    kBarrelPadLayoutTablet = 1
++} BarrelPadLayoutKind;
 +
 +/* Normalized layout rect in landscape UI coordinates: origin top-left,
 + * x/y in [0,1], width/height relative to short/long edges of the safe area. */
-+typedef struct ChimpPadLayoutRect {
++typedef struct BarrelPadLayoutRect {
 +    float x;
 +    float y;
 +    float w;
 +    float h;
-+} ChimpPadLayoutRect;
++} BarrelPadLayoutRect;
 +
-+typedef struct ChimpPadControlSpec {
-+    ChimpPadAction action;
++typedef struct BarrelPadControlSpec {
++    BarrelPadAction action;
 +    const char *label;
-+    ChimpPadLayoutRect rect;
++    BarrelPadLayoutRect rect;
 +    bool isStick; /* when true, rect is the stick well; action ignored for stick */
-+} ChimpPadControlSpec;
++} BarrelPadControlSpec;
 +
 +/* Stick: N64-style range approximately ±80 after host scaling; we expose
 + * normalized [-1,1] and mapped int8 for tests. */
-+typedef struct ChimpPadStickState {
++typedef struct BarrelPadStickState {
 +    float x; /* -1 .. 1, +right */
 +    float y; /* -1 .. 1, +up (N64 convention for DKR menus) */
-+} ChimpPadStickState;
++} BarrelPadStickState;
 +
 +/* Map a touch delta inside a stick well to stick state.
 + * dx/dy are offsets from well center in points; radius is well radius. */
-+ChimpPadStickState ChimpPad_StickFromTouch(float dx, float dy, float radius);
++BarrelPadStickState BarrelPad_StickFromTouch(float dx, float dy, float radius);
 +
 +/* Clamp and quantize stick to N64-ish ±80 int8. */
-+void ChimpPad_StickToN64(ChimpPadStickState s, int8_t *outX, int8_t *outY);
++void BarrelPad_StickToN64(BarrelPadStickState s, int8_t *outX, int8_t *outY);
 +
 +/* Safe-area inset application: shrinks a full window into a usable rect. */
-+typedef struct ChimpPadSafeArea {
++typedef struct BarrelPadSafeArea {
 +    float left, top, right, bottom; /* points inset from window edges */
 +    float width, height;            /* full window size in points */
-+} ChimpPadSafeArea;
++} BarrelPadSafeArea;
 +
-+ChimpPadLayoutRect ChimpPad_SafeAreaBounds(ChimpPadSafeArea safe);
++BarrelPadLayoutRect BarrelPad_SafeAreaBounds(BarrelPadSafeArea safe);
 +
 +/* Default control layouts for phone vs tablet (landscape).
 + * Writes up to maxSpecs entries; returns count. Stick is always index 0. */
-+int ChimpPad_DefaultLayout(ChimpPadLayoutKind kind,
-+                           ChimpPadControlSpec *outSpecs,
++int BarrelPad_DefaultLayout(BarrelPadLayoutKind kind,
++                           BarrelPadControlSpec *outSpecs,
 +                           int maxSpecs);
 +
 +/* Choose phone vs tablet from window size (points). */
-+ChimpPadLayoutKind ChimpPad_LayoutKindForSize(float width, float height);
++BarrelPadLayoutKind BarrelPad_LayoutKindForSize(float width, float height);
 +
 +/* Convert normalized layout rect into absolute points within safe bounds. */
-+ChimpPadLayoutRect ChimpPad_AbsoluteRect(ChimpPadLayoutRect bounds,
-+                                         ChimpPadLayoutRect normalized);
++BarrelPadLayoutRect BarrelPad_AbsoluteRect(BarrelPadLayoutRect bounds,
++                                         BarrelPadLayoutRect normalized);
 +
 +/* DKR keyboard scancode names used by Golden Balloon host (for docs/tests).
 + * Returns a stable token string for logging. */
-+const char *ChimpPad_ActionLabel(ChimpPadAction action);
++const char *BarrelPad_ActionLabel(BarrelPadAction action);
 +
 +/* Golden Balloon default keyboard binding tokens (X=A accel, Z=B brake, …). */
-+const char *ChimpPad_HostKeyToken(ChimpPadAction action);
++const char *BarrelPad_HostKeyToken(BarrelPadAction action);
 +
 +/* A-hold assist: after holdSeconds of continuous A, lock until tapped again.
 + * Pure state machine for unit tests. */
-+typedef struct ChimpPadHoldAssist {
++typedef struct BarrelPadHoldAssist {
 +    bool enabled;
 +    bool locked;
 +    bool fingerDown;
 +    double downTime;
 +    double holdThresholdSec;
-+} ChimpPadHoldAssist;
++} BarrelPadHoldAssist;
 +
-+void ChimpPad_HoldAssistInit(ChimpPadHoldAssist *h, double thresholdSec);
++void BarrelPad_HoldAssistInit(BarrelPadHoldAssist *h, double thresholdSec);
 +/* Returns whether A should be considered pressed after this event. */
-+bool ChimpPad_HoldAssistOnA(ChimpPadHoldAssist *h, bool fingerDown, double nowSec);
-+void ChimpPad_HoldAssistForceRelease(ChimpPadHoldAssist *h);
++bool BarrelPad_HoldAssistOnA(BarrelPadHoldAssist *h, bool fingerDown, double nowSec);
++void BarrelPad_HoldAssistForceRelease(BarrelPadHoldAssist *h);
 +
 +#ifdef __cplusplus
 +}
 +#endif
-diff --git a/platform/chimppad/ChimpPadRomBoot.h b/platform/chimppad/ChimpPadRomBoot.h
+diff --git a/platform/barrelpad/BarrelPadRomBoot.h b/platform/barrelpad/BarrelPadRomBoot.h
 new file mode 100644
 index 0000000..29b14ad
 --- /dev/null
-+++ b/platform/chimppad/ChimpPadRomBoot.h
++++ b/platform/barrelpad/BarrelPadRomBoot.h
 @@ -0,0 +1,19 @@
 +#pragma once
 +
@@ -838,21 +838,21 @@ index 0000000..29b14ad
 + * sets MDKR_ROM (and MDKR_APP_AUTOPLAY=1 if not already set) so the interactive
 + * AppHost boots into the game with touch controls still active.
 + * Returns 1 if a ROM path was resolved, 0 otherwise. */
-+int ChimpPad_PrepareIosRomBoot(void);
++int BarrelPad_PrepareIosRomBoot(void);
 +
 +/* Returns the last resolved absolute ROM path (or NULL). */
-+const char *ChimpPad_ResolvedRomPath(void);
++const char *BarrelPad_ResolvedRomPath(void);
 +
 +#ifdef __cplusplus
 +}
 +#endif
-diff --git a/platform/chimppad/ChimpPadRomBoot.mm b/platform/chimppad/ChimpPadRomBoot.mm
+diff --git a/platform/barrelpad/BarrelPadRomBoot.mm b/platform/barrelpad/BarrelPadRomBoot.mm
 new file mode 100644
 index 0000000..a3fb125
 --- /dev/null
-+++ b/platform/chimppad/ChimpPadRomBoot.mm
++++ b/platform/barrelpad/BarrelPadRomBoot.mm
 @@ -0,0 +1,99 @@
-+#include "ChimpPadRomBoot.h"
++#include "BarrelPadRomBoot.h"
 +
 +#import <Foundation/Foundation.h>
 +#include <TargetConditionals.h>
@@ -863,7 +863,7 @@ index 0000000..a3fb125
 +
 +static char sResolvedRom[1024];
 +
-+const char *ChimpPad_ResolvedRomPath(void) {
++const char *BarrelPad_ResolvedRomPath(void) {
 +    return sResolvedRom[0] ? sResolvedRom : NULL;
 +}
 +
@@ -897,7 +897,7 @@ index 0000000..a3fb125
 +    return nil;
 +}
 +
-+int ChimpPad_PrepareIosRomBoot(void) {
++int BarrelPad_PrepareIosRomBoot(void) {
 +    sResolvedRom[0] = '\0';
 +
 +    const char *existing = getenv("MDKR_ROM");
@@ -906,17 +906,17 @@ index 0000000..a3fb125
 +        if (getenv("MDKR_APP_AUTOPLAY") == NULL) {
 +            setenv("MDKR_APP_AUTOPLAY", "1", 1);
 +            fprintf(stderr,
-+                    "[ChimpPad] MDKR_ROM present; enabling MDKR_APP_AUTOPLAY "
++                    "[BarrelPad] MDKR_ROM present; enabling MDKR_APP_AUTOPLAY "
 +                    "for game boot with touch\n");
 +        }
-+        fprintf(stderr, "[ChimpPad] using MDKR_ROM=%s\n", sResolvedRom);
++        fprintf(stderr, "[BarrelPad] using MDKR_ROM=%s\n", sResolvedRom);
 +        return 1;
 +    }
 +
 +    NSArray<NSString *> *docs = NSSearchPathForDirectoriesInDomains(
 +        NSDocumentDirectory, NSUserDomainMask, YES);
 +    if (docs.count == 0) {
-+        fprintf(stderr, "[ChimpPad] Documents directory unavailable\n");
++        fprintf(stderr, "[BarrelPad] Documents directory unavailable\n");
 +        return 0;
 +    }
 +    NSString *picked = pickRomInDirectory(docs.firstObject);
@@ -928,7 +928,7 @@ index 0000000..a3fb125
 +    }
 +    if (picked == nil) {
 +        fprintf(stderr,
-+                "[ChimpPad] no ROM in Documents — launcher will ask for one\n");
++                "[BarrelPad] no ROM in Documents — launcher will ask for one\n");
 +        return 0;
 +    }
 +
@@ -938,27 +938,27 @@ index 0000000..a3fb125
 +        setenv("MDKR_APP_AUTOPLAY", "1", 1);
 +    }
 +    fprintf(stderr,
-+            "[ChimpPad] Documents ROM selected: %s (autoplay on)\n",
++            "[BarrelPad] Documents ROM selected: %s (autoplay on)\n",
 +            sResolvedRom);
 +    return 1;
 +}
 +
 +#else
 +
-+int ChimpPad_PrepareIosRomBoot(void) {
++int BarrelPad_PrepareIosRomBoot(void) {
 +    sResolvedRom[0] = '\0';
 +    return 0;
 +}
 +
 +#endif
-diff --git a/platform/chimppad/ChimpPadShell.mm b/platform/chimppad/ChimpPadShell.mm
+diff --git a/platform/barrelpad/BarrelPadShell.mm b/platform/barrelpad/BarrelPadShell.mm
 new file mode 100644
 index 0000000..c727b7e
 --- /dev/null
-+++ b/platform/chimppad/ChimpPadShell.mm
++++ b/platform/barrelpad/BarrelPadShell.mm
 @@ -0,0 +1,719 @@
 +/*
-+ * ChimpPad iOS/iPadOS shell: touch overlay + virtual controller emission.
++ * BarrelPad iOS/iPadOS shell: touch overlay + virtual controller emission.
 + * Patterns adapted from SpaghettiPad; mappings tuned for Diddy Kong Racing
 + * (Golden Balloon host keyboard/gamepad map).
 + */
@@ -974,29 +974,29 @@ index 0000000..c727b7e
 +#include <SDL.h>
 +#include <SDL_syswm.h>
 +
-+#include "ChimpPadTouchControls.h"
-+#include "ChimpPadInput.h"
++#include "BarrelPadTouchControls.h"
++#include "BarrelPadInput.h"
 +
 +static UIWindow *sSDLWindow;
 +static SDL_Joystick *sVirtualJoystick;
 +static int sVirtualDeviceIndex = -1;
-+static std::array<int, kChimpPadActionCount> sActionPressCounts = {};
++static std::array<int, kBarrelPadActionCount> sActionPressCounts = {};
 +static std::atomic_bool sMenuVisible(false);
 +static std::atomic_bool sTouchStickActive(false);
 +static std::atomic_bool sGameplayActive(true);
 +static BOOL sTouchControlsDesired = YES;
 +
-+void ChimpPad_Log(const char *fmt, ...) {
++void BarrelPad_Log(const char *fmt, ...) {
 +    char buf[1024];
 +    va_list ap;
 +    va_start(ap, fmt);
 +    vsnprintf(buf, sizeof(buf), fmt, ap);
 +    va_end(ap);
-+    NSLog(@"[ChimpPad] %s", buf);
-+    SDL_Log("[ChimpPad] %s", buf);
++    NSLog(@"[BarrelPad] %s", buf);
++    SDL_Log("[BarrelPad] %s", buf);
 +}
 +
-+static void ChimpPad_PushKey(SDL_Scancode scancode, BOOL pressed) {
++static void BarrelPad_PushKey(SDL_Scancode scancode, BOOL pressed) {
 +    SDL_Event event = {};
 +    event.type = pressed ? SDL_KEYDOWN : SDL_KEYUP;
 +    event.key.timestamp = SDL_GetTicks();
@@ -1012,107 +1012,107 @@ index 0000000..c727b7e
 +}
 +
 +/* Map actions to Golden Balloon keyboard defaults (platform_sdl_min.c). */
-+static SDL_Scancode ChimpPad_ActionScancode(ChimpPadAction action) {
++static SDL_Scancode BarrelPad_ActionScancode(BarrelPadAction action) {
 +    switch (action) {
-+        case kChimpPadActionA:
++        case kBarrelPadActionA:
 +            return SDL_SCANCODE_X; /* accelerate */
-+        case kChimpPadActionB:
++        case kBarrelPadActionB:
 +            return SDL_SCANCODE_Z; /* brake */
-+        case kChimpPadActionL:
++        case kBarrelPadActionL:
 +            return SDL_SCANCODE_Q;
-+        case kChimpPadActionR:
++        case kBarrelPadActionR:
 +            return SDL_SCANCODE_SPACE; /* hop / slide */
-+        case kChimpPadActionZ:
++        case kBarrelPadActionZ:
 +            return SDL_SCANCODE_LSHIFT; /* item */
-+        case kChimpPadActionStart:
++        case kBarrelPadActionStart:
 +            return SDL_SCANCODE_RETURN;
-+        case kChimpPadActionDUp:
++        case kBarrelPadActionDUp:
 +            return SDL_SCANCODE_UP;
-+        case kChimpPadActionDDown:
++        case kBarrelPadActionDDown:
 +            return SDL_SCANCODE_DOWN;
-+        case kChimpPadActionDLeft:
++        case kBarrelPadActionDLeft:
 +            return SDL_SCANCODE_LEFT;
-+        case kChimpPadActionDRight:
++        case kBarrelPadActionDRight:
 +            return SDL_SCANCODE_RIGHT;
-+        case kChimpPadActionCUp:
++        case kBarrelPadActionCUp:
 +            return SDL_SCANCODE_I;
-+        case kChimpPadActionCDown:
++        case kBarrelPadActionCDown:
 +            return SDL_SCANCODE_K;
-+        case kChimpPadActionCLeft:
++        case kBarrelPadActionCLeft:
 +            return SDL_SCANCODE_J;
-+        case kChimpPadActionCRight:
++        case kBarrelPadActionCRight:
 +            return SDL_SCANCODE_L;
-+        case kChimpPadActionMenu:
++        case kBarrelPadActionMenu:
 +            return SDL_SCANCODE_ESCAPE;
 +        default:
 +            return SDL_SCANCODE_UNKNOWN;
 +    }
 +}
 +
-+static SDL_GameControllerButton ChimpPad_ActionButton(ChimpPadAction action) {
++static SDL_GameControllerButton BarrelPad_ActionButton(BarrelPadAction action) {
 +    switch (action) {
-+        case kChimpPadActionA:
++        case kBarrelPadActionA:
 +            return SDL_CONTROLLER_BUTTON_A;
-+        case kChimpPadActionB:
++        case kBarrelPadActionB:
 +            return SDL_CONTROLLER_BUTTON_B;
-+        case kChimpPadActionL:
++        case kBarrelPadActionL:
 +            return SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
-+        case kChimpPadActionR:
++        case kBarrelPadActionR:
 +            return SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
-+        case kChimpPadActionStart:
++        case kBarrelPadActionStart:
 +            return SDL_CONTROLLER_BUTTON_START;
-+        case kChimpPadActionDUp:
++        case kBarrelPadActionDUp:
 +            return SDL_CONTROLLER_BUTTON_DPAD_UP;
-+        case kChimpPadActionDDown:
++        case kBarrelPadActionDDown:
 +            return SDL_CONTROLLER_BUTTON_DPAD_DOWN;
-+        case kChimpPadActionDLeft:
++        case kBarrelPadActionDLeft:
 +            return SDL_CONTROLLER_BUTTON_DPAD_LEFT;
-+        case kChimpPadActionDRight:
++        case kBarrelPadActionDRight:
 +            return SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
-+        case kChimpPadActionCDown:
++        case kBarrelPadActionCDown:
 +            return SDL_CONTROLLER_BUTTON_X;
-+        case kChimpPadActionCLeft:
++        case kBarrelPadActionCLeft:
 +            return SDL_CONTROLLER_BUTTON_Y;
 +        default:
 +            return SDL_CONTROLLER_BUTTON_INVALID;
 +    }
 +}
 +
-+static void ChimpPad_EmitAction(ChimpPadAction action, BOOL pressed) {
-+    ChimpPad_Log("touch action=%s pressed=%d", ChimpPad_ActionLabel(action),
++static void BarrelPad_EmitAction(BarrelPadAction action, BOOL pressed) {
++    BarrelPad_Log("touch action=%s pressed=%d", BarrelPad_ActionLabel(action),
 +                 pressed ? 1 : 0);
-+    if (action != kChimpPadActionMenu && sVirtualJoystick != nullptr) {
-+        if (action == kChimpPadActionZ) {
++    if (action != kBarrelPadActionMenu && sVirtualJoystick != nullptr) {
++        if (action == kBarrelPadActionZ) {
 +            SDL_JoystickSetVirtualAxis(
 +                sVirtualJoystick, SDL_CONTROLLER_AXIS_TRIGGERLEFT,
 +                pressed ? SDL_JOYSTICK_AXIS_MAX : SDL_JOYSTICK_AXIS_MIN);
 +            return;
 +        }
 +        Sint16 axisValue = pressed ? SDL_JOYSTICK_AXIS_MAX : 0;
-+        if (action == kChimpPadActionCUp) {
++        if (action == kBarrelPadActionCUp) {
 +            SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTY,
 +                                       (Sint16)(-axisValue));
 +            return;
 +        }
-+        if (action == kChimpPadActionCRight) {
++        if (action == kBarrelPadActionCRight) {
 +            SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTX,
 +                                       axisValue);
 +            return;
 +        }
-+        SDL_GameControllerButton button = ChimpPad_ActionButton(action);
++        SDL_GameControllerButton button = BarrelPad_ActionButton(action);
 +        if (button != SDL_CONTROLLER_BUTTON_INVALID) {
 +            SDL_JoystickSetVirtualButton(sVirtualJoystick, button,
 +                                         pressed ? SDL_PRESSED : SDL_RELEASED);
 +            return;
 +        }
 +    }
-+    SDL_Scancode scancode = ChimpPad_ActionScancode(action);
++    SDL_Scancode scancode = BarrelPad_ActionScancode(action);
 +    if (scancode != SDL_SCANCODE_UNKNOWN) {
-+        ChimpPad_PushKey(scancode, pressed);
++        BarrelPad_PushKey(scancode, pressed);
 +    }
 +}
 +
-+static void ChimpPad_SetAction(ChimpPadAction action, BOOL pressed) {
++static void BarrelPad_SetAction(BarrelPadAction action, BOOL pressed) {
 +    int &count = sActionPressCounts[action];
 +    BOOL wasPressed = count > 0;
 +    if (pressed) {
@@ -1122,11 +1122,11 @@ index 0000000..c727b7e
 +    }
 +    BOOL isPressed = count > 0;
 +    if (wasPressed != isPressed) {
-+        ChimpPad_EmitAction(action, isPressed);
++        BarrelPad_EmitAction(action, isPressed);
 +    }
 +}
 +
-+static void ChimpPad_SetStickAxes(Sint16 x, Sint16 y) {
++static void BarrelPad_SetStickAxes(Sint16 x, Sint16 y) {
 +    if (sVirtualJoystick != nullptr) {
 +        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTX, x);
 +        SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTY, y);
@@ -1134,43 +1134,43 @@ index 0000000..c727b7e
 +    }
 +    /* Keyboard fallback for stick via host WASD/arrows. */
 +    const Sint16 thr = SDL_JOYSTICK_AXIS_MAX / 3;
-+    ChimpPad_PushKey(SDL_SCANCODE_LEFT, x < -thr);
-+    ChimpPad_PushKey(SDL_SCANCODE_RIGHT, x > thr);
-+    ChimpPad_PushKey(SDL_SCANCODE_UP, y < -thr);
-+    ChimpPad_PushKey(SDL_SCANCODE_DOWN, y > thr);
++    BarrelPad_PushKey(SDL_SCANCODE_LEFT, x < -thr);
++    BarrelPad_PushKey(SDL_SCANCODE_RIGHT, x > thr);
++    BarrelPad_PushKey(SDL_SCANCODE_UP, y < -thr);
++    BarrelPad_PushKey(SDL_SCANCODE_DOWN, y > thr);
 +}
 +
-+static void ChimpPad_AttachVirtualController(void) {
++static void BarrelPad_AttachVirtualController(void) {
 +    if (sVirtualJoystick != nullptr) {
 +        return;
 +    }
 +    sVirtualDeviceIndex = SDL_JoystickAttachVirtual(
 +        SDL_JOYSTICK_TYPE_GAMECONTROLLER, 6, 16, 0);
 +    if (sVirtualDeviceIndex < 0) {
-+        ChimpPad_Log("virtual joystick attach failed: %s", SDL_GetError());
++        BarrelPad_Log("virtual joystick attach failed: %s", SDL_GetError());
 +        return;
 +    }
 +    sVirtualJoystick = SDL_JoystickOpen(sVirtualDeviceIndex);
 +    if (sVirtualJoystick == nullptr) {
-+        ChimpPad_Log("virtual joystick open failed: %s", SDL_GetError());
++        BarrelPad_Log("virtual joystick open failed: %s", SDL_GetError());
 +        return;
 +    }
-+    ChimpPad_Log("virtual controller attached index=%d", sVirtualDeviceIndex);
++    BarrelPad_Log("virtual controller attached index=%d", sVirtualDeviceIndex);
 +}
 +
-+static void ChimpPad_ResetAllInputs(void) {
-+    for (int a = 0; a < kChimpPadActionCount; ++a) {
++static void BarrelPad_ResetAllInputs(void) {
++    for (int a = 0; a < kBarrelPadActionCount; ++a) {
 +        if (sActionPressCounts[a] > 0) {
 +            sActionPressCounts[a] = 0;
-+            ChimpPad_EmitAction((ChimpPadAction)a, NO);
++            BarrelPad_EmitAction((BarrelPadAction)a, NO);
 +        }
 +    }
-+    ChimpPad_SetStickAxes(0, 0);
++    BarrelPad_SetStickAxes(0, 0);
 +    sTouchStickActive.store(false);
 +}
 +
-+@interface ChimpPadTouchButton : UIButton
-+@property(nonatomic) ChimpPadAction action;
++@interface BarrelPadTouchButton : UIButton
++@property(nonatomic) BarrelPadAction action;
 +@property(nonatomic) BOOL inputPressed;
 +@property(nonatomic) BOOL outputPressed;
 +@property(nonatomic) BOOL holdAssistEnabled;
@@ -1180,13 +1180,13 @@ index 0000000..c727b7e
 +@property(nonatomic, copy) NSString *normalLabel;
 +@property(nonatomic, strong) UIColor *idleColor;
 +@property(nonatomic, strong) UIColor *pressedColor;
-+- (instancetype)initWithLabel:(NSString *)label action:(ChimpPadAction)action;
++- (instancetype)initWithLabel:(NSString *)label action:(BarrelPadAction)action;
 +- (void)applyIdleColor:(UIColor *)idle pressedColor:(UIColor *)pressed;
 +- (void)cancelInput;
 +@end
 +
-+@implementation ChimpPadTouchButton
-+- (instancetype)initWithLabel:(NSString *)label action:(ChimpPadAction)action {
++@implementation BarrelPadTouchButton
++- (instancetype)initWithLabel:(NSString *)label action:(BarrelPadAction)action {
 +    self = [super initWithFrame:CGRectZero];
 +    if (self) {
 +        self.action = action;
@@ -1231,7 +1231,7 @@ index 0000000..c727b7e
 +    self.inputDownTime = CACurrentMediaTime();
 +    [self updateOutput];
 +    [self updateAppearance];
-+    if (self.holdAssistEnabled && !wasLocked && self.action == kChimpPadActionA &&
++    if (self.holdAssistEnabled && !wasLocked && self.action == kBarrelPadActionA &&
 +        sGameplayActive.load()) {
 +        NSUInteger generation = self.releaseGeneration;
 +        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.65 * NSEC_PER_SEC)),
@@ -1247,7 +1247,7 @@ index 0000000..c727b7e
 +                               [[UIImpactFeedbackGenerator alloc]
 +                                   initWithStyle:UIImpactFeedbackStyleMedium];
 +                           [fb impactOccurred];
-+                           ChimpPad_Log("A hold assist locked");
++                           BarrelPad_Log("A hold assist locked");
 +                       });
 +    }
 +}
@@ -1267,7 +1267,7 @@ index 0000000..c727b7e
 +        return;
 +    }
 +    self.outputPressed = shouldPress;
-+    ChimpPad_SetAction(self.action, shouldPress);
++    BarrelPad_SetAction(self.action, shouldPress);
 +}
 +
 +- (void)updateAppearance {
@@ -1300,12 +1300,12 @@ index 0000000..c727b7e
 +}
 +@end
 +
-+@interface ChimpPadTouchStick : UIView
++@interface BarrelPadTouchStick : UIView
 +@property(nonatomic, strong) UIView *knob;
 +- (void)cancelInput;
 +@end
 +
-+@implementation ChimpPadTouchStick
++@implementation BarrelPadTouchStick
 +- (instancetype)initWithFrame:(CGRect)frame {
 +    self = [super initWithFrame:frame];
 +    if (self) {
@@ -1350,11 +1350,11 @@ index 0000000..c727b7e
 +        dy = dy / distance * radius;
 +    }
 +    self.knob.center = CGPointMake(center.x + dx, center.y + dy);
-+    ChimpPadStickState st = ChimpPad_StickFromTouch(dx, dy, (float)radius);
++    BarrelPadStickState st = BarrelPad_StickFromTouch(dx, dy, (float)radius);
 +    Sint16 x = (Sint16)lround(st.x * SDL_JOYSTICK_AXIS_MAX);
-+    /* ChimpPad_StickFromTouch already uses +up N64; SDL left-stick +y is down. */
++    /* BarrelPad_StickFromTouch already uses +up N64; SDL left-stick +y is down. */
 +    Sint16 y = (Sint16)lround(-st.y * SDL_JOYSTICK_AXIS_MAX);
-+    ChimpPad_SetStickAxes(x, y);
++    BarrelPad_SetStickAxes(x, y);
 +}
 +
 +- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
@@ -1381,7 +1381,7 @@ index 0000000..c727b7e
 +}
 +
 +- (void)cancelInput {
-+    ChimpPad_SetStickAxes(0, 0);
++    BarrelPad_SetStickAxes(0, 0);
 +    sTouchStickActive.store(false);
 +    self.knob.center =
 +        CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
@@ -1392,53 +1392,53 @@ index 0000000..c727b7e
 +    return CGRectMake(center.x - w * 0.5, center.y - h * 0.5, w, h);
 +}
 +
-+@interface ChimpPadTouchOverlay : UIView
-+@property(nonatomic, strong) ChimpPadTouchStick *stick;
-+@property(nonatomic, strong) NSArray<ChimpPadTouchButton *> *buttons;
-+@property(nonatomic, strong) ChimpPadTouchButton *buttonA;
-+@property(nonatomic, strong) ChimpPadTouchButton *buttonB;
-+@property(nonatomic, strong) ChimpPadTouchButton *buttonL;
-+@property(nonatomic, strong) ChimpPadTouchButton *buttonZ;
-+@property(nonatomic, strong) ChimpPadTouchButton *buttonR;
-+@property(nonatomic, strong) ChimpPadTouchButton *buttonStart;
-+@property(nonatomic, strong) ChimpPadTouchButton *cUp;
-+@property(nonatomic, strong) ChimpPadTouchButton *cDown;
-+@property(nonatomic, strong) ChimpPadTouchButton *cLeft;
-+@property(nonatomic, strong) ChimpPadTouchButton *cRight;
-+@property(nonatomic, strong) ChimpPadTouchButton *menuButton;
++@interface BarrelPadTouchOverlay : UIView
++@property(nonatomic, strong) BarrelPadTouchStick *stick;
++@property(nonatomic, strong) NSArray<BarrelPadTouchButton *> *buttons;
++@property(nonatomic, strong) BarrelPadTouchButton *buttonA;
++@property(nonatomic, strong) BarrelPadTouchButton *buttonB;
++@property(nonatomic, strong) BarrelPadTouchButton *buttonL;
++@property(nonatomic, strong) BarrelPadTouchButton *buttonZ;
++@property(nonatomic, strong) BarrelPadTouchButton *buttonR;
++@property(nonatomic, strong) BarrelPadTouchButton *buttonStart;
++@property(nonatomic, strong) BarrelPadTouchButton *cUp;
++@property(nonatomic, strong) BarrelPadTouchButton *cDown;
++@property(nonatomic, strong) BarrelPadTouchButton *cLeft;
++@property(nonatomic, strong) BarrelPadTouchButton *cRight;
++@property(nonatomic, strong) BarrelPadTouchButton *menuButton;
 +- (void)cancelAllInputs;
 +@end
 +
-+@implementation ChimpPadTouchOverlay
++@implementation BarrelPadTouchOverlay
 +- (instancetype)initWithFrame:(CGRect)frame {
 +    self = [super initWithFrame:frame];
 +    if (self) {
 +        self.backgroundColor = UIColor.clearColor;
 +        self.multipleTouchEnabled = YES;
-+        self.stick = [[ChimpPadTouchStick alloc] initWithFrame:CGRectZero];
-+        self.buttonA = [[ChimpPadTouchButton alloc] initWithLabel:@"A"
-+                                                           action:kChimpPadActionA];
++        self.stick = [[BarrelPadTouchStick alloc] initWithFrame:CGRectZero];
++        self.buttonA = [[BarrelPadTouchButton alloc] initWithLabel:@"A"
++                                                           action:kBarrelPadActionA];
 +        self.buttonA.holdAssistEnabled = YES;
-+        self.buttonB = [[ChimpPadTouchButton alloc] initWithLabel:@"B"
-+                                                           action:kChimpPadActionB];
-+        self.buttonL = [[ChimpPadTouchButton alloc] initWithLabel:@"L"
-+                                                           action:kChimpPadActionL];
-+        self.buttonZ = [[ChimpPadTouchButton alloc] initWithLabel:@"Z"
-+                                                           action:kChimpPadActionZ];
-+        self.buttonR = [[ChimpPadTouchButton alloc] initWithLabel:@"R"
-+                                                           action:kChimpPadActionR];
-+        self.buttonStart = [[ChimpPadTouchButton alloc] initWithLabel:@"▶"
-+                                                               action:kChimpPadActionStart];
-+        self.cUp = [[ChimpPadTouchButton alloc] initWithLabel:@"▲"
-+                                                       action:kChimpPadActionCUp];
-+        self.cDown = [[ChimpPadTouchButton alloc] initWithLabel:@"▼"
-+                                                         action:kChimpPadActionCDown];
-+        self.cLeft = [[ChimpPadTouchButton alloc] initWithLabel:@"◀"
-+                                                         action:kChimpPadActionCLeft];
-+        self.cRight = [[ChimpPadTouchButton alloc] initWithLabel:@"▶"
-+                                                          action:kChimpPadActionCRight];
-+        self.menuButton = [[ChimpPadTouchButton alloc] initWithLabel:@"•••"
-+                                                              action:kChimpPadActionMenu];
++        self.buttonB = [[BarrelPadTouchButton alloc] initWithLabel:@"B"
++                                                           action:kBarrelPadActionB];
++        self.buttonL = [[BarrelPadTouchButton alloc] initWithLabel:@"L"
++                                                           action:kBarrelPadActionL];
++        self.buttonZ = [[BarrelPadTouchButton alloc] initWithLabel:@"Z"
++                                                           action:kBarrelPadActionZ];
++        self.buttonR = [[BarrelPadTouchButton alloc] initWithLabel:@"R"
++                                                           action:kBarrelPadActionR];
++        self.buttonStart = [[BarrelPadTouchButton alloc] initWithLabel:@"▶"
++                                                               action:kBarrelPadActionStart];
++        self.cUp = [[BarrelPadTouchButton alloc] initWithLabel:@"▲"
++                                                       action:kBarrelPadActionCUp];
++        self.cDown = [[BarrelPadTouchButton alloc] initWithLabel:@"▼"
++                                                         action:kBarrelPadActionCDown];
++        self.cLeft = [[BarrelPadTouchButton alloc] initWithLabel:@"◀"
++                                                         action:kBarrelPadActionCLeft];
++        self.cRight = [[BarrelPadTouchButton alloc] initWithLabel:@"▶"
++                                                          action:kBarrelPadActionCRight];
++        self.menuButton = [[BarrelPadTouchButton alloc] initWithLabel:@"•••"
++                                                              action:kBarrelPadActionMenu];
 +
 +        [self.buttonA
 +            applyIdleColor:[UIColor colorWithRed:0.08 green:0.35 blue:0.88 alpha:0.78]
@@ -1451,7 +1451,7 @@ index 0000000..c727b7e
 +              pressedColor:[UIColor colorWithRed:0.94 green:0.22 blue:0.26 alpha:0.88]];
 +        UIColor *cIdle = [UIColor colorWithRed:0.95 green:0.67 blue:0.12 alpha:0.72];
 +        UIColor *cPressed = [UIColor colorWithRed:1.00 green:0.78 blue:0.20 alpha:0.86];
-+        for (ChimpPadTouchButton *b in @[ self.cUp, self.cDown, self.cLeft, self.cRight ]) {
++        for (BarrelPadTouchButton *b in @[ self.cUp, self.cDown, self.cLeft, self.cRight ]) {
 +            b.idleColor = cIdle;
 +            b.pressedColor = cPressed;
 +            b.backgroundColor = cIdle;
@@ -1463,7 +1463,7 @@ index 0000000..c727b7e
 +            self.menuButton
 +        ];
 +        [self addSubview:self.stick];
-+        for (ChimpPadTouchButton *b in self.buttons) {
++        for (BarrelPadTouchButton *b in self.buttons) {
 +            [self addSubview:b];
 +        }
 +    }
@@ -1485,8 +1485,8 @@ index 0000000..c727b7e
 +    UIEdgeInsets safe = self.safeAreaInsets;
 +    CGFloat width = CGRectGetWidth(self.bounds);
 +    CGFloat height = CGRectGetHeight(self.bounds);
-+    ChimpPadLayoutKind kind = ChimpPad_LayoutKindForSize((float)width, (float)height);
-+    BOOL phone = (kind == kChimpPadLayoutPhone);
++    BarrelPadLayoutKind kind = BarrelPad_LayoutKindForSize((float)width, (float)height);
++    BOOL phone = (kind == kBarrelPadLayoutPhone);
 +
 +    CGFloat left = safe.left + (phone ? 10.0 : 24.0);
 +    CGFloat right = safe.right + (phone ? 10.0 : 24.0);
@@ -1532,14 +1532,14 @@ index 0000000..c727b7e
 +    self.buttonStart.frame =
 +        CGRectMake(width - right - startW, top + 32.0, startW, 36.0);
 +
-+    ChimpPad_Log("layout kind=%s size=%.0fx%.0f safe L%.0f R%.0f T%.0f B%.0f",
++    BarrelPad_Log("layout kind=%s size=%.0fx%.0f safe L%.0f R%.0f T%.0f B%.0f",
 +                 phone ? "phone" : "tablet", width, height, safe.left, safe.right,
 +                 safe.top, safe.bottom);
 +}
 +
 +- (void)cancelAllInputs {
 +    [self.stick cancelInput];
-+    for (ChimpPadTouchButton *b in self.buttons) {
++    for (BarrelPadTouchButton *b in self.buttons) {
 +        [b cancelInput];
 +    }
 +}
@@ -1547,9 +1547,9 @@ index 0000000..c727b7e
 +
 +
 +
-+static ChimpPadTouchOverlay *sOverlay;
++static BarrelPadTouchOverlay *sOverlay;
 +
-+static void ChimpPad_ApplyTouchControlsState(void) {
++static void BarrelPad_ApplyTouchControlsState(void) {
 +    if (sOverlay == nil) {
 +        return;
 +    }
@@ -1557,15 +1557,15 @@ index 0000000..c727b7e
 +    sOverlay.hidden = !show;
 +    if (!show) {
 +        [sOverlay cancelAllInputs];
-+        ChimpPad_ResetAllInputs();
++        BarrelPad_ResetAllInputs();
 +    }
 +}
 +
-+static void ChimpPad_InstallOverlay(void) {
++static void BarrelPad_InstallOverlay(void) {
 +    if (sOverlay != nil || sSDLWindow == nil) {
 +        return;
 +    }
-+    sOverlay = [[ChimpPadTouchOverlay alloc] initWithFrame:sSDLWindow.bounds];
++    sOverlay = [[BarrelPadTouchOverlay alloc] initWithFrame:sSDLWindow.bounds];
 +    sOverlay.autoresizingMask =
 +        UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 +    [sSDLWindow addSubview:sOverlay];
@@ -1573,12 +1573,12 @@ index 0000000..c727b7e
 +    sOverlay.opaque = NO;
 +    sOverlay.alpha = 1.0;
 +    [sSDLWindow bringSubviewToFront:sOverlay];
-+    ChimpPad_AttachVirtualController();
-+    ChimpPad_ApplyTouchControlsState();
-+    ChimpPad_Log("touch overlay installed");
++    BarrelPad_AttachVirtualController();
++    BarrelPad_ApplyTouchControlsState();
++    BarrelPad_Log("touch overlay installed");
 +}
 +
-+void ChimpPad_OnWindowCreated(struct SDL_Window *window) {
++void BarrelPad_OnWindowCreated(struct SDL_Window *window) {
 +    if (window == nullptr) {
 +        return;
 +    }
@@ -1589,7 +1589,7 @@ index 0000000..c727b7e
 +        sSDLWindow = info.info.uikit.window;
 +#endif
 +    } else {
-+        ChimpPad_Log("SDL_GetWindowWMInfo failed: %s", SDL_GetError());
++        BarrelPad_Log("SDL_GetWindowWMInfo failed: %s", SDL_GetError());
 +    }
 +    if (sSDLWindow == nil) {
 +        /* Fallback: key window / first app window (Metal path race). */
@@ -1608,10 +1608,10 @@ index 0000000..c727b7e
 +                }
 +            }
 +        }
-+        ChimpPad_Log("UIKit window fallback used=%d", sSDLWindow != nil ? 1 : 0);
++        BarrelPad_Log("UIKit window fallback used=%d", sSDLWindow != nil ? 1 : 0);
 +    }
 +    if (sSDLWindow == nil) {
-+        ChimpPad_Log("no UIKit window yet — retrying install shortly");
++        BarrelPad_Log("no UIKit window yet — retrying install shortly");
 +        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
 +                       dispatch_get_main_queue(), ^{
 +            if (sSDLWindow == nil) {
@@ -1623,16 +1623,16 @@ index 0000000..c727b7e
 +                    }
 +                }
 +            }
-+            ChimpPad_InstallOverlay();
++            BarrelPad_InstallOverlay();
 +        });
 +        return;
 +    }
 +    dispatch_async(dispatch_get_main_queue(), ^{
-+        ChimpPad_InstallOverlay();
++        BarrelPad_InstallOverlay();
 +    });
 +}
 +
-+int ChimpPad_TouchControlsAvailable(void) {
++int BarrelPad_TouchControlsAvailable(void) {
 +#if TARGET_OS_IOS
 +    return 1;
 +#else
@@ -1640,32 +1640,32 @@ index 0000000..c727b7e
 +#endif
 +}
 +
-+void ChimpPad_InitializeTouchControls(void) {
++void BarrelPad_InitializeTouchControls(void) {
 +    sTouchControlsDesired = YES;
-+    ChimpPad_Log("initialize touch controls");
++    BarrelPad_Log("initialize touch controls");
 +    if (sSDLWindow != nil) {
-+        ChimpPad_InstallOverlay();
++        BarrelPad_InstallOverlay();
 +    }
 +}
 +
-+void ChimpPad_SetTouchControlsEnabled(int enabled) {
++void BarrelPad_SetTouchControlsEnabled(int enabled) {
 +    sTouchControlsDesired = enabled ? YES : NO;
-+    ChimpPad_ApplyTouchControlsState();
++    BarrelPad_ApplyTouchControlsState();
 +}
 +
-+void ChimpPad_SetGameplayActive(int active) {
++void BarrelPad_SetGameplayActive(int active) {
 +    sGameplayActive.store(active != 0);
 +    if (!active && sOverlay != nil) {
 +        [sOverlay cancelAllInputs];
 +    }
 +}
 +
-+void ChimpPad_SetMenuVisible(int visible) {
++void BarrelPad_SetMenuVisible(int visible) {
 +    sMenuVisible.store(visible != 0);
-+    ChimpPad_ApplyTouchControlsState();
++    BarrelPad_ApplyTouchControlsState();
 +}
 +
-+float ChimpPad_RecommendedMenuScale(void) {
++float BarrelPad_RecommendedMenuScale(void) {
 +    if (sSDLWindow == nil) {
 +        return 1.0f;
 +    }
@@ -1676,11 +1676,11 @@ index 0000000..c727b7e
 +    }
 +    return 1.0f;
 +}
-diff --git a/platform/chimppad/ChimpPadTouchControls.h b/platform/chimppad/ChimpPadTouchControls.h
+diff --git a/platform/barrelpad/BarrelPadTouchControls.h b/platform/barrelpad/BarrelPadTouchControls.h
 new file mode 100644
 index 0000000..2903f9b
 --- /dev/null
-+++ b/platform/chimppad/ChimpPadTouchControls.h
++++ b/platform/barrelpad/BarrelPadTouchControls.h
 @@ -0,0 +1,22 @@
 +#pragma once
 +
@@ -1690,27 +1690,27 @@ index 0000000..2903f9b
 +
 +struct SDL_Window;
 +
-+void ChimpPad_OnWindowCreated(struct SDL_Window *window);
-+int ChimpPad_TouchControlsAvailable(void);
-+void ChimpPad_InitializeTouchControls(void);
-+void ChimpPad_SetTouchControlsEnabled(int enabled);
-+void ChimpPad_SetGameplayActive(int active);
-+void ChimpPad_SetMenuVisible(int visible);
-+float ChimpPad_RecommendedMenuScale(void);
++void BarrelPad_OnWindowCreated(struct SDL_Window *window);
++int BarrelPad_TouchControlsAvailable(void);
++void BarrelPad_InitializeTouchControls(void);
++void BarrelPad_SetTouchControlsEnabled(int enabled);
++void BarrelPad_SetGameplayActive(int active);
++void BarrelPad_SetMenuVisible(int visible);
++float BarrelPad_RecommendedMenuScale(void);
 +
 +/* Runtime logging helper used by shell and tests. */
-+void ChimpPad_Log(const char *fmt, ...);
++void BarrelPad_Log(const char *fmt, ...);
 +
 +#ifdef __cplusplus
 +}
 +#endif
-diff --git a/platform/chimppad_ios_main.c b/platform/chimppad_ios_main.c
+diff --git a/platform/barrelpad_ios_main.c b/platform/barrelpad_ios_main.c
 new file mode 100644
 index 0000000..7d8be6c
 --- /dev/null
-+++ b/platform/chimppad_ios_main.c
++++ b/platform/barrelpad_ios_main.c
 @@ -0,0 +1,15 @@
-+/* ChimpPad iOS entry via SDL's UIKit application lifecycle. */
++/* BarrelPad iOS entry via SDL's UIKit application lifecycle. */
 +#include <SDL.h>
 +#include <SDL_main.h>
 +
@@ -1753,7 +1753,7 @@ index 0000000..387bfab
 --- /dev/null
 +++ b/platform/gfx_opengl_ios_stub.c
 @@ -0,0 +1,24 @@
-+/* ChimpPad iOS: WebGPU-only. Stub desktop OpenGL backend entry points. */
++/* BarrelPad iOS: WebGPU-only. Stub desktop OpenGL backend entry points. */
 +#include <stddef.h>
 +#include <stdint.h>
 +#include <stdio.h>
@@ -1763,7 +1763,7 @@ index 0000000..387bfab
 +static int stub_unused(void) { return 0; }
 +
 +struct GfxRenderingAPI *gfx_opengl_api(void) {
-+    fprintf(stderr, "[ChimpPad] gfx_opengl_api unavailable on iOS (WebGPU only)\n");
++    fprintf(stderr, "[BarrelPad] gfx_opengl_api unavailable on iOS (WebGPU only)\n");
 +    return NULL;
 +}
 +
@@ -1795,8 +1795,8 @@ index 30ca61e..2a764ae 100644
 +#include <OpenGLES/ES3/gl.h>
 +#include <OpenGLES/ES3/glext.h>
 +/* iOS uses system GLES symbols; no glad. */
-+static int chimppad_ios_glad_stub(void) { return 1; }
-+#define gladLoadGLLoader(x) chimppad_ios_glad_stub()
++static int barrelpad_ios_glad_stub(void) { return 1; }
++#define gladLoadGLLoader(x) barrelpad_ios_glad_stub()
 +typedef void *(*GLADloadproc)(const char *);
 +#else
  #include <glad/glad.h>          /* GL loader — desktop only; web is WebGPU-only */
@@ -1823,10 +1823,10 @@ index 30ca61e..2a764ae 100644
      printf("[SDL] Window created (Emscripten / WebGPU via #canvas)\n");
 +
 +#if defined(__APPLE__) && TARGET_OS_IOS
-+    ChimpPad_OnWindowCreated(s_window);
-+    ChimpPad_InitializeTouchControls();
-+    ChimpPad_SetGameplayActive(1);
-+    fprintf(stderr, "[ChimpPad] touch overlay requested after SDL window create\n");
++    BarrelPad_OnWindowCreated(s_window);
++    BarrelPad_InitializeTouchControls();
++    BarrelPad_SetGameplayActive(1);
++    fprintf(stderr, "[BarrelPad] touch overlay requested after SDL window create\n");
 +#endif
      return 0;   /* device/surface bring-up happens in gfx_init -> wgpu_init */
  #else /* !__EMSCRIPTEN__ */

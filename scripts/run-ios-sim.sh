@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Install and launch ChimpPad on one Simulator (phone or pad). Only one at a time.
-# Boots into DKR when a ROM is present in Documents (or CHIMPPAD_ROM / --rom).
+# Install and launch BarrelPad on one Simulator (phone or pad). Only one at a time.
+# Boots into DKR when a ROM is present in Documents (or BARRELPAD_ROM / --rom).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FAMILY="${1:-phone}"
-BUILD="${CHIMPPAD_IOS_BUILD:-$ROOT/build-ios-sim}"
-APP="$BUILD/ChimpPad.app"
-ROM="${CHIMPPAD_ROM:-}"
+BUILD="${BARRELPAD_IOS_BUILD:-$ROOT/build-ios-sim}"
+APP="$BUILD/BarrelPad.app"
+ROM="${BARRELPAD_ROM:-}"
 if [ -z "$ROM" ]; then
   for cand in \
     "$ROOT/ref/Diddy Kong Racing (U) (M2) (V1.1) [!].v64" \
@@ -42,7 +42,7 @@ else
   fi
 fi
 
-echo "[ChimpPad] booting Simulator $DEV ($FAMILY)"
+echo "[BarrelPad] booting Simulator $DEV ($FAMILY)"
 xcrun simctl boot "$DEV" 2>/dev/null || true
 open -a Simulator --args -CurrentDeviceUDID "$DEV" || true
 for i in $(seq 1 60); do
@@ -52,38 +52,38 @@ for i in $(seq 1 60); do
 done
 
 xcrun simctl install "$DEV" "$APP"
-BUNDLE="com.chrissotraidis.chimppad"
+BUNDLE="com.chrissotraidis.barrelpad"
 
 DATA=$(xcrun simctl get_app_container "$DEV" "$BUNDLE" data)
 mkdir -p "$DATA/Documents"
 if [ -n "$ROM" ] && [ -f "$ROM" ]; then
   cp -f "$ROM" "$DATA/Documents/diddy-kong-racing.v64"
-  echo "[ChimpPad] ROM installed to Documents/diddy-kong-racing.v64"
+  echo "[BarrelPad] ROM installed to Documents/diddy-kong-racing.v64"
 fi
 
 # Child env: boot game with AppHost + touch (not headless CLI path).
-# ChimpPad_PrepareIosRomBoot also auto-discovers Documents ROMs.
+# BarrelPad_PrepareIosRomBoot also auto-discovers Documents ROMs.
 export SIMCTL_CHILD_MDKR_ROM="${DATA}/Documents/diddy-kong-racing.v64"
 export SIMCTL_CHILD_MDKR_APP_AUTOPLAY=1
 # Optional: scripted pad while agent also taps overlay
 # Default to official TT race route so smoke reaches in-race gameplay.
-INPUT_SCRIPT="${CHIMPPAD_INPUT_SCRIPT:-$ROOT/ref/goldenballoon/tests/input_scripts/race_drive_time_trial.txt}"
+INPUT_SCRIPT="${BARRELPAD_INPUT_SCRIPT:-$ROOT/ref/goldenballoon/tests/input_scripts/race_drive_time_trial.txt}"
 if [ ! -f "$INPUT_SCRIPT" ] && [ -f "$ROOT/sources/goldenballoon/tests/input_scripts/race_drive_time_trial.txt" ]; then
   INPUT_SCRIPT="$ROOT/sources/goldenballoon/tests/input_scripts/race_drive_time_trial.txt"
 fi
 if [ -f "$INPUT_SCRIPT" ]; then
   cp -f "$INPUT_SCRIPT" "$DATA/Documents/input-script.txt"
   export SIMCTL_CHILD_MDKR_APP_AUTOPLAY_INPUT_SCRIPT="$DATA/Documents/input-script.txt"
-  echo "[ChimpPad] input script: $INPUT_SCRIPT"
+  echo "[BarrelPad] input script: $INPUT_SCRIPT"
 fi
 
-echo "[ChimpPad] launching $BUNDLE (MDKR_APP_AUTOPLAY + Documents ROM)"
-if [ -n "${CHIMPPAD_CONSOLE_LOG:-}" ]; then
+echo "[BarrelPad] launching $BUNDLE (MDKR_APP_AUTOPLAY + Documents ROM)"
+if [ -n "${BARRELPAD_CONSOLE_LOG:-}" ]; then
   xcrun simctl launch --console --terminate-running-process "$DEV" "$BUNDLE" \
-    >"$CHIMPPAD_CONSOLE_LOG" 2>&1 &
+    >"$BARRELPAD_CONSOLE_LOG" 2>&1 &
 else
   xcrun simctl launch --terminate-running-process "$DEV" "$BUNDLE"
 fi
 
-echo "[ChimpPad] launched on $FAMILY ($DEV)"
+echo "[BarrelPad] launched on $FAMILY ($DEV)"
 echo "$DEV" > "$BUILD/last-sim-udid.txt"

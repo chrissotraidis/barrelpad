@@ -2,7 +2,7 @@
 
 ## Hard rules
 
-1. **Supply your own ROM.** ChimpPad never ships, downloads, or generates a
+1. **Supply your own ROM.** BarrelPad never ships, downloads, or generates a
    Diddy Kong Racing ROM or extractable copyrighted assets.
 2. **Local use only.** The ROM in `ref/` is for local build, extract, and run
    on this machine. Do not commit, push, redistribute, bundle into `.app` /
@@ -39,7 +39,7 @@ cp "ref/Diddy Kong Racing (U) (M2) (V1.1) [!].v64" \
 # US 1.1: REGION=us VERSION=v80
 ```
 
-ChimpPad **play** does not require decomp extract/build.
+BarrelPad **play** does not require decomp extract/build.
 
 ## App packaging checks
 

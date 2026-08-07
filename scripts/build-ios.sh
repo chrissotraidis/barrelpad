@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Build ChimpPad for iOS / iPadOS Simulator (arm64).
+# Build BarrelPad for iOS / iPadOS Simulator (arm64).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SOURCE="${BARRELPAD_SOURCE:-$ROOT/sources/goldenballoon}"
 FAMILY="phone"
 MODE="simulator"
 
@@ -14,48 +15,56 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ "$MODE" != "simulator" ]; then
-  echo "[ChimpPad] physical device builds are out of scope for this milestone" >&2
-  exit 2
+if [ "$MODE" = "device" ]; then
+  SDK="iphoneos"
+  IOS_SIMULATOR="OFF"
+  BUILD_DEFAULT="$ROOT/build-ios-device"
+  SDL_DEFAULT="$ROOT/build-deps/sdl2-ios-dev"
+  ACTOOL_PLATFORM="iphoneos"
+else
+  SDK="iphonesimulator"
+  IOS_SIMULATOR="ON"
+  BUILD_DEFAULT="$ROOT/build-ios-sim"
+  SDL_DEFAULT="$ROOT/build-deps/sdl2-ios-sim"
+  ACTOOL_PLATFORM="iphonesimulator"
 fi
 
 "$ROOT/scripts/test-unit.sh"
 
 # Ensure host sources exist (patched goldenballoon under sources/)
-if [ ! -f "$ROOT/sources/goldenballoon/CMakeLists.txt" ]; then
+if [ ! -f "$SOURCE/CMakeLists.txt" ]; then
   "$ROOT/scripts/clone-refs.sh"
-  # Apply iOS patches via re-run of configure path documented in BUILDING.md
-  echo "[ChimpPad] sources missing patches; clone-refs done — re-apply iOS patches before build"
 fi
+"$ROOT/scripts/apply-ios-patches.sh" "$SOURCE"
 
-SDL_PREFIX="${CHIMPPAD_SDL_IOS:-$ROOT/build-deps/sdl2-ios-sim}"
+SDL_PREFIX="${BARRELPAD_SDL_IOS:-$SDL_DEFAULT}"
 if [ ! -f "$SDL_PREFIX/lib/libSDL2.a" ]; then
-  echo "[ChimpPad] building SDL2 for iOS Simulator..."
-  "$ROOT/scripts/build-sdl2-ios.sh"
+  echo "[BarrelPad] building SDL2 for iOS $MODE..."
+  "$ROOT/scripts/build-sdl2-ios.sh" "--$MODE"
 fi
 
 export PKG_CONFIG_PATH="$SDL_PREFIX/lib/pkgconfig"
 export PKG_CONFIG_LIBDIR="$SDL_PREFIX/lib/pkgconfig"
 
-BUILD="${CHIMPPAD_IOS_BUILD:-$ROOT/build-ios-sim}"
-cmake -S "$ROOT/sources/goldenballoon" -B "$BUILD" \
+BUILD="${BARRELPAD_IOS_BUILD:-$BUILD_DEFAULT}"
+cmake -S "$SOURCE" -B "$BUILD" \
   -DCMAKE_SYSTEM_NAME=iOS \
-  -DCMAKE_OSX_SYSROOT=iphonesimulator \
+  -DCMAKE_OSX_SYSROOT="$SDK" \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
   -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_SYSTEM_PROCESSOR=arm64 \
   -DCMAKE_BUILD_TYPE=Release \
   -G Ninja \
-  -DMDKR_IOS_SIMULATOR=ON \
+  -DMDKR_IOS_SIMULATOR="$IOS_SIMULATOR" \
   -DBUILD_TESTING=OFF \
   -DCMAKE_PREFIX_PATH="$SDL_PREFIX"
 
-cmake --build "$BUILD" -j"${CHIMPPAD_JOBS:-$(sysctl -n hw.ncpu)}" --target mdkr64
+cmake --build "$BUILD" -j"${BARRELPAD_JOBS:-$(sysctl -n hw.ncpu)}" --target mdkr64
 
-# Package ChimpPad.app
-APP="$BUILD/ChimpPad.app"
+# Package BarrelPad.app
+APP="$BUILD/BarrelPad.app"
 mkdir -p "$APP"
-cp -f "$BUILD/mdkr64.app/mdkr64" "$APP/ChimpPad"
+cp -f "$BUILD/mdkr64.app/mdkr64" "$APP/BarrelPad"
 # Apps without modern launch-screen metadata are placed in the legacy 480x320
 # iPhone compatibility canvas. Always package the reviewed native template.
 cp -f "$ROOT/ios/Info.plist" "$APP/Info.plist"
@@ -63,12 +72,12 @@ cp -f "$ROOT/ios/Info.plist" "$APP/Info.plist"
 # Xcode's asset compiler turns the checked-in universal AppIcon catalog into
 # the Assets.car used by modern iOS and iPadOS launchers.
 actool --compile "$APP" \
-  --platform iphonesimulator \
+  --platform "$ACTOOL_PLATFORM" \
   --minimum-deployment-target 15.0 \
   --app-icon AppIcon \
   --output-partial-info-plist "$BUILD/AppIcon-Info.plist" \
   "$ROOT/ios/Assets.xcassets"
 /usr/libexec/PlistBuddy -c "Merge $BUILD/AppIcon-Info.plist" "$APP/Info.plist"
 
-echo "[ChimpPad] Simulator app ($FAMILY): $APP"
+echo "[BarrelPad] $MODE app ($FAMILY): $APP"
 echo "$APP" > "$BUILD/last-app-path.txt"

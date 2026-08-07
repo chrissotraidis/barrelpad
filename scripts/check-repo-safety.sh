@@ -21,4 +21,4 @@ fi
 if [ "$bad" -ne 0 ]; then
   exit 1
 fi
-echo "[ChimpPad] repo safety OK (no tracked ROMs)"
+echo "[BarrelPad] repo safety OK (no tracked ROMs)"

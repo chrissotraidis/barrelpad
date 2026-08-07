@@ -1,6 +1,6 @@
 # Dependencies
 
-Every external dependency used by ChimpPad. Prefer pinning revisions. Do not
+Every external dependency used by BarrelPad. Prefer pinning revisions. Do not
 add optional or speculative dependencies.
 
 ## Reference repositories (`ref/`)
@@ -11,7 +11,7 @@ add optional or speculative dependencies.
 | Diddy Kong Racing decomp | https://github.com/davidsm64/diddy-kong-racing | `c66957033046b1d66e72fcb096bf90fb49bcedba` | Matching decomp; control/docs research; not runtime host | `git clone` into `ref/diddy-kong-racing` |
 | Golden Balloon | https://github.com/akratch/goldenballoon | `6fc93d886b090b22eb39d90fada535faa7282f2d` | Native DKR port (game host) | `git clone` into `ref/goldenballoon`; build via CMake (see BUILDING.md) |
 
-### Decomp-only tools (not required for ChimpPad play)
+### Decomp-only tools (not required for BarrelPad play)
 
 Recorded for completeness if someone rebuilds the N64 ROM from decomp:
 
@@ -20,7 +20,7 @@ Recorded for completeness if someone rebuilds the N64 ROM from decomp:
 - MIPS binutils / IDO (installed by decomp `make setup`)
 - Submodules under decomp `tools/`
 
-**ChimpPad play path does not run the decomp Makefile.** Golden Balloon loads
+**BarrelPad play path does not run the decomp Makefile.** Golden Balloon loads
 assets from the ROM at runtime.
 
 ## Host build dependencies (macOS)
@@ -28,7 +28,7 @@ assets from the ROM at runtime.
 | Dependency | Source | Purpose |
 |---|---|---|
 | Xcode + CLT | Apple | clang, iOS Simulator, Metal, codesign tooling |
-| CMake ≥ 3.16 | Homebrew `cmake` | Configure Golden Balloon / ChimpPad |
+| CMake ≥ 3.16 | Homebrew `cmake` | Configure Golden Balloon / BarrelPad |
 | Ninja | Homebrew `ninja` | Fast builds |
 | pkg-config | Homebrew `pkgconf` | Find SDL2 |
 | SDL2 | Homebrew or Golden Balloon’s release-built SDL2 | Window, audio, input, controllers |
@@ -65,7 +65,7 @@ Label: US 1.1 (M2)
 ```
 
 Golden Balloon accepts `.z64` / `.v64` / `.n64` and verifies revision (US 1.1
-and European 1.1 supported). ChimpPad must copy or pass a path; never rewrite
+and European 1.1 supported). BarrelPad must copy or pass a path; never rewrite
 the canonical `ref/` file in place for redistribution.
 
 ## Intentionally not added
@@ -79,7 +79,7 @@ the canonical `ref/` file in place for redistribution.
 
 ## License notes
 
-- ChimpPad integration code: project license (see root LICENSE when present).
+- BarrelPad integration code: project license (see root LICENSE when present).
 - Golden Balloon first-party: MIT (see `ref/goldenballoon/LICENSE`, `NOTICE.md`).
 - Decomp: see `ref/diddy-kong-racing/LICENSE.md`.
 - SpaghettiPad: reference only; rights boundary in its `RIGHTS_AND_LICENSES.md`.

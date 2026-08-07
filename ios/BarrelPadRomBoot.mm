@@ -1,4 +1,4 @@
-#include "ChimpPadRomBoot.h"
+#include "BarrelPadRomBoot.h"
 
 #import <Foundation/Foundation.h>
 #include <TargetConditionals.h>
@@ -9,7 +9,7 @@
 
 static char sResolvedRom[1024];
 
-const char *ChimpPad_ResolvedRomPath(void) {
+const char *BarrelPad_ResolvedRomPath(void) {
     return sResolvedRom[0] ? sResolvedRom : NULL;
 }
 
@@ -63,17 +63,17 @@ static NSString *prepareDocumentsDirectory(void) {
         return docsPath;
     }
 
-    NSString *holdingPath = [docsPath stringByAppendingString:@".chimpPad-recovery"];
+    NSString *holdingPath = [docsPath stringByAppendingString:@".barrelpad-recovery"];
     NSError *error = nil;
     if ([fm fileExistsAtPath:holdingPath] ||
         ![fm moveItemAtPath:docsPath toPath:holdingPath error:&error]) {
-        fprintf(stderr, "[ChimpPad] could not recover malformed Documents path: %s\n",
+        fprintf(stderr, "[BarrelPad] could not recover malformed Documents path: %s\n",
                 error.localizedDescription.UTF8String);
         return nil;
     }
     if (![fm createDirectoryAtPath:docsPath
        withIntermediateDirectories:NO attributes:nil error:&error]) {
-        fprintf(stderr, "[ChimpPad] could not recreate Documents: %s\n",
+        fprintf(stderr, "[BarrelPad] could not recreate Documents: %s\n",
                 error.localizedDescription.UTF8String);
         [fm moveItemAtPath:holdingPath toPath:docsPath error:nil];
         return nil;
@@ -84,15 +84,15 @@ static NSString *prepareDocumentsDirectory(void) {
         romPath = [docsPath stringByAppendingPathComponent:@"diddy-kong-racing-recovered.v64"];
     }
     if (![fm moveItemAtPath:holdingPath toPath:romPath error:&error]) {
-        fprintf(stderr, "[ChimpPad] Documents recovered but ROM is held at %s: %s\n",
+        fprintf(stderr, "[BarrelPad] Documents recovered but ROM is held at %s: %s\n",
                 holdingPath.UTF8String, error.localizedDescription.UTF8String);
         return docsPath;
     }
-    fprintf(stderr, "[ChimpPad] recovered ROM into Documents: %s\n", romPath.UTF8String);
+    fprintf(stderr, "[BarrelPad] recovered ROM into Documents: %s\n", romPath.UTF8String);
     return docsPath;
 }
 
-int ChimpPad_PrepareIosRomBoot(void) {
+int BarrelPad_PrepareIosRomBoot(void) {
     sResolvedRom[0] = '\0';
 
     /* A UIKit game has no useful windowed mode. Resolve the host window before
@@ -114,7 +114,7 @@ int ChimpPad_PrepareIosRomBoot(void) {
                [docsPath stringByAppendingPathComponent:@"mdkr64.ini"].UTF8String, 1);
         setenv("MDKR_SAVE_DIR",
                [docsPath stringByAppendingPathComponent:@"save"].UTF8String, 1);
-        fprintf(stderr, "[ChimpPad] writable dirs -> %s\n", docsPath.UTF8String);
+        fprintf(stderr, "[BarrelPad] writable dirs -> %s\n", docsPath.UTF8String);
     }
 
     const char *existing = getenv("MDKR_ROM");
@@ -123,15 +123,15 @@ int ChimpPad_PrepareIosRomBoot(void) {
         if (getenv("MDKR_APP_AUTOPLAY") == NULL) {
             setenv("MDKR_APP_AUTOPLAY", "1", 1);
             fprintf(stderr,
-                    "[ChimpPad] MDKR_ROM present; enabling MDKR_APP_AUTOPLAY "
+                    "[BarrelPad] MDKR_ROM present; enabling MDKR_APP_AUTOPLAY "
                     "for game boot with touch\n");
         }
-        fprintf(stderr, "[ChimpPad] using MDKR_ROM=%s\n", sResolvedRom);
+        fprintf(stderr, "[BarrelPad] using MDKR_ROM=%s\n", sResolvedRom);
         return 1;
     }
 
     if (docsPath == nil) {
-        fprintf(stderr, "[ChimpPad] Documents directory unavailable\n");
+        fprintf(stderr, "[BarrelPad] Documents directory unavailable\n");
         return 0;
     }
     NSString *picked = pickRomInDirectory(docsPath);
@@ -143,7 +143,7 @@ int ChimpPad_PrepareIosRomBoot(void) {
     }
     if (picked == nil) {
         fprintf(stderr,
-                "[ChimpPad] no ROM in Documents — launcher will ask for one\n");
+                "[BarrelPad] no ROM in Documents — launcher will ask for one\n");
         return 0;
     }
 
@@ -153,14 +153,14 @@ int ChimpPad_PrepareIosRomBoot(void) {
         setenv("MDKR_APP_AUTOPLAY", "1", 1);
     }
     fprintf(stderr,
-            "[ChimpPad] Documents ROM selected: %s (autoplay on)\n",
+            "[BarrelPad] Documents ROM selected: %s (autoplay on)\n",
             sResolvedRom);
     return 1;
 }
 
 #else
 
-int ChimpPad_PrepareIosRomBoot(void) {
+int BarrelPad_PrepareIosRomBoot(void) {
     sResolvedRom[0] = '\0';
     return 0;
 }

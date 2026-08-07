@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Launch ChimpPad macOS host with optional ROM path and verbose logging.
+# Launch BarrelPad macOS host with optional ROM path and verbose logging.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BUILD="${CHIMPPAD_MACOS_BUILD:-$ROOT/build-macos}"
+BUILD="${BARRELPAD_MACOS_BUILD:-$ROOT/build-macos}"
 BIN="$BUILD/mdkr64"
 ROM=""
 EXTRA=()
@@ -32,11 +32,11 @@ if [ -z "$ROM" ]; then
 fi
 
 export SDL_LOG_PRIORITY="${SDL_LOG_PRIORITY:-INFO}"
-echo "[ChimpPad] launching $BIN"
+echo "[BarrelPad] launching $BIN"
 if [ -n "$ROM" ]; then
-  echo "[ChimpPad] ROM=$ROM"
+  echo "[BarrelPad] ROM=$ROM"
   exec "$BIN" --rom "$ROM" "${EXTRA[@]}"
 else
-  echo "[ChimpPad] no ROM path; opening launcher"
+  echo "[BarrelPad] no ROM path; opening launcher"
   exec "$BIN" "${EXTRA[@]}"
 fi

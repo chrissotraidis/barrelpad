@@ -9,10 +9,10 @@ extern "C" {
  * sets MDKR_ROM (and MDKR_APP_AUTOPLAY=1 if not already set) so the interactive
  * AppHost boots into the game with touch controls still active.
  * Returns 1 if a ROM path was resolved, 0 otherwise. */
-int ChimpPad_PrepareIosRomBoot(void);
+int BarrelPad_PrepareIosRomBoot(void);
 
 /* Returns the last resolved absolute ROM path (or NULL). */
-const char *ChimpPad_ResolvedRomPath(void);
+const char *BarrelPad_ResolvedRomPath(void);
 
 #ifdef __cplusplus
 }

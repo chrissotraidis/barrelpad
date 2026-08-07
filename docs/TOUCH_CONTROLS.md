@@ -24,10 +24,24 @@ Adapted from **SpaghettiPad** grip layout and behavior; mapped for
 | Mid-right | C-pad (camera) |
 | Top-right | **•••** menu, **▶** Start under it |
 
+The default compact centers are the accepted physical-iPhone layout captured
+on an iPhone 14. They are stored as normalized coordinates so the same grip
+composition adapts to other supported iPhone landscape sizes.
+
 ### Tablet / large landscape
 
 Rail layout scaled from SpaghettiPad’s iPad defaults: larger stick, dual-Z face
 cluster, C-pad lower-right, Start above right Z.
+
+Phone and tablet customizations are persisted in separate profiles. Changing
+the iPhone layout does not change the iPad default.
+
+## Editing a layout
+
+Open **Settings → Touch Controls → Move Controls**. Select a control, drag it
+to a new position, and use the slider to resize only that control from 0.70x to
+1.50x. **Done** persists the active phone/tablet profile, closes the editor,
+clears any held input, and restores the gameplay touch path.
 
 ## Default racing mapping
 
@@ -64,7 +78,7 @@ cluster, C-pad lower-right, Start above right Z.
 
 ## Implementation
 
-- UIKit overlay: `ios/ChimpPadShell.mm`
-- Pure layout helpers / tests: `src/ChimpPadInput.c`
+- UIKit overlay: `ios/BarrelPadShell.mm`
+- Pure layout helpers / tests: `src/BarrelPadInput.c`
 - Host merge: `platform_ios_touch_set` in goldenballoon `platform_sdl_min.c`
   (applied via `scripts/ensure-ios-touch-inject.py`)

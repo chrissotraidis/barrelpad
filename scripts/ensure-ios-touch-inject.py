@@ -19,7 +19,7 @@ if "platform_ios_touch_set" not in os_text:
     needle = "void         platform_pad_stick(int port, int *sx, int *sy);\n"
     insert = (
         needle
-        + "/* ChimpPad iOS: direct P1 pad injection (N64 button bits + ±80 stick). */\n"
+        + "/* BarrelPad iOS: direct P1 pad injection (N64 button bits + ±80 stick). */\n"
         + "void         platform_ios_touch_set(unsigned int buttons, int stick_x, "
         + "int stick_y, int enabled);\n"
     )
@@ -27,9 +27,9 @@ if "platform_ios_touch_set" not in os_text:
         print("platform_os.h: cannot find pad_stick decl", file=sys.stderr)
         sys.exit(1)
     os_h.write_text(os_text.replace(needle, insert, 1))
-    print("[ChimpPad] declared platform_ios_touch_set in platform_os.h")
+    print("[BarrelPad] declared platform_ios_touch_set in platform_os.h")
 else:
-    print("[ChimpPad] platform_os.h already has platform_ios_touch_set")
+    print("[BarrelPad] platform_os.h already has platform_ios_touch_set")
 
 sdl_text = sdl.read_text()
 changed = False
@@ -41,13 +41,13 @@ if "s_iosTouchSource" not in sdl_text:
         sys.exit(1)
     block = (
         m.group(0)
-        + "/* ChimpPad iOS touch pad — merged into P1 like the browser touch path. */\n"
+        + "/* BarrelPad iOS touch pad — merged into P1 like the browser touch path. */\n"
         + "static struct pad_state s_iosTouchSource;\n"
         + "static int s_iosTouchEnabled;\n"
     )
     sdl_text = sdl_text[: m.start()] + block + sdl_text[m.end() :]
     changed = True
-    print("[ChimpPad] added s_iosTouchSource state")
+    print("[BarrelPad] added s_iosTouchSource state")
 
 FUNC = r"""
 void platform_ios_touch_set(unsigned int buttons, int stick_x, int stick_y, int enabled) {
@@ -60,7 +60,7 @@ void platform_ios_touch_set(unsigned int buttons, int stick_x, int stick_y, int 
         s_iosTouchSource.stick_y = 0;
         s_iosTouchSource.present = 0;
         if (s_lastLoggedEnabled != 0) {
-            fprintf(stderr, "[ChimpPad] ios_touch disabled\n");
+            fprintf(stderr, "[BarrelPad] ios_touch disabled\n");
             s_lastLoggedEnabled = 0;
             s_lastLoggedButtons = 0;
         }
@@ -76,7 +76,7 @@ void platform_ios_touch_set(unsigned int buttons, int stick_x, int stick_y, int 
     s_iosTouchSource.present = 1;
     if (s_lastLoggedEnabled != 1 || s_lastLoggedButtons != buttons) {
         fprintf(stderr,
-                "[ChimpPad] ios_touch set buttons=0x%04x stick=%d,%d\n",
+                "[BarrelPad] ios_touch set buttons=0x%04x stick=%d,%d\n",
                 buttons, stick_x, stick_y);
         s_lastLoggedEnabled = 1;
         s_lastLoggedButtons = buttons;
@@ -110,7 +110,7 @@ static void ios_force_pad_apply(void) {
         if (delay && delay[0]) s_forceDelayFrames = atoi(delay);
         if (hold && hold[0]) s_forceHoldFrames = atoi(hold);
         fprintf(stderr,
-                "[ChimpPad] ios_force_pad buttons=0x%04x delay=%d hold=%d\n",
+                "[BarrelPad] ios_force_pad buttons=0x%04x delay=%d hold=%d\n",
                 s_forceButtons, s_forceDelayFrames, s_forceHoldFrames);
     }
     if (s_forceButtons == 0) {
@@ -123,7 +123,7 @@ static void ios_force_pad_apply(void) {
     if (s_forceAge > s_forceDelayFrames + s_forceHoldFrames) {
         if (s_iosTouchSource.buttons & s_forceButtons) {
             s_iosTouchSource.buttons &= ~s_forceButtons;
-            fprintf(stderr, "[ChimpPad] ios_force_pad release 0x%04x\n",
+            fprintf(stderr, "[BarrelPad] ios_force_pad release 0x%04x\n",
                     s_forceButtons);
         }
         return;
@@ -132,7 +132,7 @@ static void ios_force_pad_apply(void) {
         s_iosTouchEnabled = 1;
         s_iosTouchSource.buttons |= s_forceButtons;
         s_iosTouchSource.present = 1;
-        fprintf(stderr, "[ChimpPad] ios_force_pad press 0x%04x age=%d\n",
+        fprintf(stderr, "[BarrelPad] ios_force_pad press 0x%04x age=%d\n",
                 s_forceButtons, s_forceAge);
     }
 }
@@ -163,7 +163,7 @@ if "void platform_ios_touch_set" not in sdl_text:
         sys.exit(1)
     sdl_text = sdl_text.replace(anchor, FUNC + "\n" + anchor, 1)
     changed = True
-    print("[ChimpPad] inserted platform_ios_touch_set + ios_touch_merge")
+    print("[BarrelPad] inserted platform_ios_touch_set + ios_touch_merge")
 elif "ios_force_pad_apply" not in sdl_text:
     pat = re.compile(
         r"void platform_ios_touch_set\(unsigned int buttons, int stick_x, "
@@ -175,14 +175,14 @@ elif "ios_force_pad_apply" not in sdl_text:
     if pat.search(sdl_text):
         sdl_text = pat.sub(FUNC.strip(), sdl_text, count=1)
         changed = True
-        print("[ChimpPad] upgraded platform_ios_touch_set + force pad")
+        print("[BarrelPad] upgraded platform_ios_touch_set + force pad")
     else:
-        print("[ChimpPad] platform_ios_touch_set present (left as-is)")
+        print("[BarrelPad] platform_ios_touch_set present (left as-is)")
 else:
-    print("[ChimpPad] platform_ios_touch_set already current")
+    print("[BarrelPad] platform_ios_touch_set already current")
 
 MERGE = """#if defined(__APPLE__)
-            /* ChimpPad: merge iOS touch pad into P1 after keyboard/controller. */
+            /* BarrelPad: merge iOS touch pad into P1 after keyboard/controller. */
             if (port == 0) {
                 ios_force_pad_apply();
                 if (s_iosTouchEnabled) {
@@ -194,7 +194,7 @@ MERGE = """#if defined(__APPLE__)
 # Prefer upgraded merge block
 if "ios_force_pad_apply()" not in sdl_text:
     old_merge = """#if defined(__APPLE__)
-            /* ChimpPad: merge iOS touch pad into P1 after keyboard/controller. */
+            /* BarrelPad: merge iOS touch pad into P1 after keyboard/controller. */
             if (port == 0 && s_iosTouchEnabled) {
                 ios_touch_merge(&s_iosTouchSource, &live);
             }
@@ -203,7 +203,7 @@ if "ios_force_pad_apply()" not in sdl_text:
     if old_merge in sdl_text:
         sdl_text = sdl_text.replace(old_merge, MERGE, 1)
         changed = True
-        print("[ChimpPad] upgraded ios_touch_merge call site with force pad")
+        print("[BarrelPad] upgraded ios_touch_merge call site with force pad")
     elif "ios_touch_merge(&s_iosTouchSource" not in sdl_text:
         needle = (
             "            if (s_gc[port] != NULL) {\n"
@@ -215,14 +215,14 @@ if "ios_force_pad_apply()" not in sdl_text:
             sys.exit(1)
         sdl_text = sdl_text.replace(needle, needle + MERGE, 1)
         changed = True
-        print("[ChimpPad] wired ios_touch_merge into input_capture_live")
+        print("[BarrelPad] wired ios_touch_merge into input_capture_live")
     else:
-        print("[ChimpPad] ios_touch_merge present without force pad upgrade path")
+        print("[BarrelPad] ios_touch_merge present without force pad upgrade path")
 else:
-    print("[ChimpPad] ios_force_pad_apply already wired")
+    print("[BarrelPad] ios_force_pad_apply already wired")
 
 if changed:
     sdl.write_text(sdl_text)
-    print("[ChimpPad] wrote", sdl)
+    print("[BarrelPad] wrote", sdl)
 else:
-    print("[ChimpPad] platform_sdl_min.c unchanged")
+    print("[BarrelPad] platform_sdl_min.c unchanged")

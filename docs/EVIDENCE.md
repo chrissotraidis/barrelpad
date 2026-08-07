@@ -1,5 +1,24 @@
 # Test evidence ledger
 
+## 2026-08-07 — BarrelPad physical-device acceptance
+
+- Product/bundle: `BarrelPad.app`, executable `BarrelPad`, bundle identifier
+  `com.chrissotraidis.barrelpad`.
+- iPhone 14: signed install and launch pass; Apple A15 WebGPU adapter; native
+  `2532×1170` drawable; touch overlay and virtual P1 controller initialized;
+  US 1.1 ROM verified and game boot entered.
+- iPad Pro 12.9-inch: signed install and launch pass; Apple M2 WebGPU adapter;
+  native `2732×2048` drawable; existing tablet layout retained; ROM verified
+  and game boot entered.
+- Migration: each device's existing ROM and EEPROM/autosaves were backed up,
+  copied into its new bundle container, and read back. Source/destination
+  SHA-256 values matched, and each save directory compared without differences.
+- iPhone default: the accepted physical-phone control centers are compiled as
+  the compact fallback. Tablet defaults remain on the separate tablet path.
+- Input editor: individual selection, movement, and 0.70x–1.50x sizing compile
+  into the device product; leaving the editor resets stale held input and
+  restores the touch source.
+
 ## 2026-08-05 — In-race basic gameplay (all targets)
 
 Official route: `ref/goldenballoon/tests/input_scripts/race_drive_time_trial.txt`

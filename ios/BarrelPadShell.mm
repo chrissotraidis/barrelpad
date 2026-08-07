@@ -1,5 +1,5 @@
 /*
- * ChimpPad iOS/iPadOS shell: touch overlay + virtual controller emission.
+ * BarrelPad iOS/iPadOS shell: touch overlay + virtual controller emission.
  * Patterns adapted from SpaghettiPad; mappings tuned for Diddy Kong Racing
  * (Golden Balloon host keyboard/gamepad map).
  */
@@ -17,15 +17,15 @@
 #include <SDL_syswm.h>
 
 #include "app/app_config.h"
-#include "ChimpPadTouchControls.h"
-#include "ChimpPadInput.h"
+#include "BarrelPadTouchControls.h"
+#include "BarrelPadInput.h"
 #include "platform_os.h"
 #include "controller_mapping.h"
 
 static UIWindow *sSDLWindow;
 static SDL_Joystick *sVirtualJoystick;
 static int sVirtualDeviceIndex = -1;
-static std::array<int, kChimpPadActionCount> sActionPressCounts = {};
+static std::array<int, kBarrelPadActionCount> sActionPressCounts = {};
 static unsigned int sHeldButtons = 0;
 static int sStickX = 0;
 static int sStickY = 0;
@@ -38,17 +38,17 @@ static BOOL sLayoutEditorActive = NO;
  * written by platform_ios_touch_set_scale and read during layout. */
 static float sTouchControlScale = 1.0f;
 
-void ChimpPad_Log(const char *fmt, ...) {
+void BarrelPad_Log(const char *fmt, ...) {
     char buf[1024];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
-    NSLog(@"[ChimpPad] %s", buf);
-    SDL_Log("[ChimpPad] %s", buf);
+    NSLog(@"[BarrelPad] %s", buf);
+    SDL_Log("[BarrelPad] %s", buf);
 }
 
-static void ChimpPad_PushKey(SDL_Scancode scancode, BOOL pressed) {
+static void BarrelPad_PushKey(SDL_Scancode scancode, BOOL pressed) {
     SDL_Event event = {};
     event.type = pressed ? SDL_KEYDOWN : SDL_KEYUP;
     event.key.timestamp = SDL_GetTicks();
@@ -64,118 +64,118 @@ static void ChimpPad_PushKey(SDL_Scancode scancode, BOOL pressed) {
 }
 
 /* Map actions to Golden Balloon keyboard defaults (platform_sdl_min.c). */
-static SDL_Scancode ChimpPad_ActionScancode(ChimpPadAction action) {
+static SDL_Scancode BarrelPad_ActionScancode(BarrelPadAction action) {
     switch (action) {
-        case kChimpPadActionA:
+        case kBarrelPadActionA:
             return SDL_SCANCODE_X; /* accelerate */
-        case kChimpPadActionB:
+        case kBarrelPadActionB:
             return SDL_SCANCODE_Z; /* brake */
-        case kChimpPadActionL:
+        case kBarrelPadActionL:
             return SDL_SCANCODE_Q;
-        case kChimpPadActionR:
+        case kBarrelPadActionR:
             return SDL_SCANCODE_SPACE; /* hop / slide */
-        case kChimpPadActionZ:
+        case kBarrelPadActionZ:
             return SDL_SCANCODE_LSHIFT; /* item */
-        case kChimpPadActionStart:
+        case kBarrelPadActionStart:
             return SDL_SCANCODE_RETURN;
-        case kChimpPadActionDUp:
+        case kBarrelPadActionDUp:
             return SDL_SCANCODE_UP;
-        case kChimpPadActionDDown:
+        case kBarrelPadActionDDown:
             return SDL_SCANCODE_DOWN;
-        case kChimpPadActionDLeft:
+        case kBarrelPadActionDLeft:
             return SDL_SCANCODE_LEFT;
-        case kChimpPadActionDRight:
+        case kBarrelPadActionDRight:
             return SDL_SCANCODE_RIGHT;
-        case kChimpPadActionCUp:
+        case kBarrelPadActionCUp:
             return SDL_SCANCODE_I;
-        case kChimpPadActionCDown:
+        case kBarrelPadActionCDown:
             return SDL_SCANCODE_K;
-        case kChimpPadActionCLeft:
+        case kBarrelPadActionCLeft:
             return SDL_SCANCODE_J;
-        case kChimpPadActionCRight:
+        case kBarrelPadActionCRight:
             return SDL_SCANCODE_L;
-        case kChimpPadActionMenu:
+        case kBarrelPadActionMenu:
             return SDL_SCANCODE_ESCAPE;
         default:
             return SDL_SCANCODE_UNKNOWN;
     }
 }
 
-static unsigned int ChimpPad_ActionN64Bit(ChimpPadAction action) {
+static unsigned int BarrelPad_ActionN64Bit(BarrelPadAction action) {
     switch (action) {
-        case kChimpPadActionA: return MDKR_N64_A;
-        case kChimpPadActionB: return MDKR_N64_B;
-        case kChimpPadActionL: return MDKR_N64_L;
-        case kChimpPadActionR: return MDKR_N64_R;
-        case kChimpPadActionZ: return MDKR_N64_Z;
-        case kChimpPadActionStart: return MDKR_N64_START;
-        case kChimpPadActionDUp: return MDKR_N64_DU;
-        case kChimpPadActionDDown: return MDKR_N64_DD;
-        case kChimpPadActionDLeft: return MDKR_N64_DL;
-        case kChimpPadActionDRight: return MDKR_N64_DR;
-        case kChimpPadActionCUp: return MDKR_N64_CU;
-        case kChimpPadActionCDown: return MDKR_N64_CD;
-        case kChimpPadActionCLeft: return MDKR_N64_CL;
-        case kChimpPadActionCRight: return MDKR_N64_CR;
+        case kBarrelPadActionA: return MDKR_N64_A;
+        case kBarrelPadActionB: return MDKR_N64_B;
+        case kBarrelPadActionL: return MDKR_N64_L;
+        case kBarrelPadActionR: return MDKR_N64_R;
+        case kBarrelPadActionZ: return MDKR_N64_Z;
+        case kBarrelPadActionStart: return MDKR_N64_START;
+        case kBarrelPadActionDUp: return MDKR_N64_DU;
+        case kBarrelPadActionDDown: return MDKR_N64_DD;
+        case kBarrelPadActionDLeft: return MDKR_N64_DL;
+        case kBarrelPadActionDRight: return MDKR_N64_DR;
+        case kBarrelPadActionCUp: return MDKR_N64_CU;
+        case kBarrelPadActionCDown: return MDKR_N64_CD;
+        case kBarrelPadActionCLeft: return MDKR_N64_CL;
+        case kBarrelPadActionCRight: return MDKR_N64_CR;
         default: return 0;
     }
 }
 
-static void ChimpPad_PublishPad(void) {
+static void BarrelPad_PublishPad(void) {
     /* Direct P1 merge into the engine input queue — reliable on iOS where a
      * virtual joystick is not always bound as the game's primary controller. */
     static unsigned int sLastLoggedButtons = 0xFFFFFFFFu;
     platform_ios_touch_set(sHeldButtons, sStickX, sStickY, 1);
     if (sLastLoggedButtons != sHeldButtons) {
-        ChimpPad_Log("pad inject buttons=0x%04x stick=%d,%d", sHeldButtons,
+        BarrelPad_Log("pad inject buttons=0x%04x stick=%d,%d", sHeldButtons,
                      sStickX, sStickY);
         sLastLoggedButtons = sHeldButtons;
     }
 }
 
 /* Mirror face/shoulder actions onto the virtual gamepad when attached. */
-static void ChimpPad_EmitVirtualButton(ChimpPadAction action, BOOL pressed) {
+static void BarrelPad_EmitVirtualButton(BarrelPadAction action, BOOL pressed) {
     if (sVirtualJoystick == nullptr) {
         return;
     }
-    if (action == kChimpPadActionZ) {
+    if (action == kBarrelPadActionZ) {
         SDL_JoystickSetVirtualAxis(
             sVirtualJoystick, SDL_CONTROLLER_AXIS_TRIGGERLEFT,
             pressed ? SDL_JOYSTICK_AXIS_MAX : SDL_JOYSTICK_AXIS_MIN);
         return;
     }
     Sint16 axisValue = pressed ? SDL_JOYSTICK_AXIS_MAX : 0;
-    if (action == kChimpPadActionCUp) {
+    if (action == kBarrelPadActionCUp) {
         SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTY,
                                    (Sint16)(-axisValue));
         return;
     }
-    if (action == kChimpPadActionCDown) {
+    if (action == kBarrelPadActionCDown) {
         SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTY,
                                    axisValue);
         return;
     }
-    if (action == kChimpPadActionCLeft) {
+    if (action == kBarrelPadActionCLeft) {
         SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTX,
                                    (Sint16)(-axisValue));
         return;
     }
-    if (action == kChimpPadActionCRight) {
+    if (action == kBarrelPadActionCRight) {
         SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_RIGHTX,
                                    axisValue);
         return;
     }
     SDL_GameControllerButton button = SDL_CONTROLLER_BUTTON_INVALID;
     switch (action) {
-        case kChimpPadActionA: button = SDL_CONTROLLER_BUTTON_A; break;
-        case kChimpPadActionB: button = SDL_CONTROLLER_BUTTON_B; break;
-        case kChimpPadActionL: button = SDL_CONTROLLER_BUTTON_LEFTSHOULDER; break;
-        case kChimpPadActionR: button = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER; break;
-        case kChimpPadActionStart: button = SDL_CONTROLLER_BUTTON_START; break;
-        case kChimpPadActionDUp: button = SDL_CONTROLLER_BUTTON_DPAD_UP; break;
-        case kChimpPadActionDDown: button = SDL_CONTROLLER_BUTTON_DPAD_DOWN; break;
-        case kChimpPadActionDLeft: button = SDL_CONTROLLER_BUTTON_DPAD_LEFT; break;
-        case kChimpPadActionDRight: button = SDL_CONTROLLER_BUTTON_DPAD_RIGHT; break;
+        case kBarrelPadActionA: button = SDL_CONTROLLER_BUTTON_A; break;
+        case kBarrelPadActionB: button = SDL_CONTROLLER_BUTTON_B; break;
+        case kBarrelPadActionL: button = SDL_CONTROLLER_BUTTON_LEFTSHOULDER; break;
+        case kBarrelPadActionR: button = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER; break;
+        case kBarrelPadActionStart: button = SDL_CONTROLLER_BUTTON_START; break;
+        case kBarrelPadActionDUp: button = SDL_CONTROLLER_BUTTON_DPAD_UP; break;
+        case kBarrelPadActionDDown: button = SDL_CONTROLLER_BUTTON_DPAD_DOWN; break;
+        case kBarrelPadActionDLeft: button = SDL_CONTROLLER_BUTTON_DPAD_LEFT; break;
+        case kBarrelPadActionDRight: button = SDL_CONTROLLER_BUTTON_DPAD_RIGHT; break;
         default: break;
     }
     if (button != SDL_CONTROLLER_BUTTON_INVALID) {
@@ -184,37 +184,37 @@ static void ChimpPad_EmitVirtualButton(ChimpPadAction action, BOOL pressed) {
     }
 }
 
-static void ChimpPad_EmitAction(ChimpPadAction action, BOOL pressed) {
-    ChimpPad_Log("touch action=%s pressed=%d", ChimpPad_ActionLabel(action),
+static void BarrelPad_EmitAction(BarrelPadAction action, BOOL pressed) {
+    BarrelPad_Log("touch action=%s pressed=%d", BarrelPad_ActionLabel(action),
                  pressed ? 1 : 0);
-    if (action == kChimpPadActionMenu) {
+    if (action == kBarrelPadActionMenu) {
         /* Escape opens the host ImGui overlay and swallows game pad input while
          * open. Still emit it so Settings remains reachable. */
-        SDL_Scancode scancode = ChimpPad_ActionScancode(action);
+        SDL_Scancode scancode = BarrelPad_ActionScancode(action);
         if (scancode != SDL_SCANCODE_UNKNOWN) {
-            ChimpPad_PushKey(scancode, pressed);
+            BarrelPad_PushKey(scancode, pressed);
         }
-        ChimpPad_Log("menu key (host overlay) pressed=%d", pressed ? 1 : 0);
+        BarrelPad_Log("menu key (host overlay) pressed=%d", pressed ? 1 : 0);
         return;
     }
-    unsigned int bit = ChimpPad_ActionN64Bit(action);
+    unsigned int bit = BarrelPad_ActionN64Bit(action);
     if (bit != 0) {
         if (pressed) {
             sHeldButtons |= bit;
         } else {
             sHeldButtons &= ~bit;
         }
-        ChimpPad_PublishPad();
+        BarrelPad_PublishPad();
     }
-    ChimpPad_EmitVirtualButton(action, pressed);
+    BarrelPad_EmitVirtualButton(action, pressed);
     /* Also synthesize keyboard for any host path that still reads keys. */
-    SDL_Scancode scancode = ChimpPad_ActionScancode(action);
+    SDL_Scancode scancode = BarrelPad_ActionScancode(action);
     if (scancode != SDL_SCANCODE_UNKNOWN) {
-        ChimpPad_PushKey(scancode, pressed);
+        BarrelPad_PushKey(scancode, pressed);
     }
 }
 
-static void ChimpPad_SetAction(ChimpPadAction action, BOOL pressed) {
+static void BarrelPad_SetAction(BarrelPadAction action, BOOL pressed) {
     int &count = sActionPressCounts[action];
     BOOL wasPressed = count > 0;
     if (pressed) {
@@ -224,11 +224,11 @@ static void ChimpPad_SetAction(ChimpPadAction action, BOOL pressed) {
     }
     BOOL isPressed = count > 0;
     if (wasPressed != isPressed) {
-        ChimpPad_EmitAction(action, isPressed);
+        BarrelPad_EmitAction(action, isPressed);
     }
 }
 
-static void ChimpPad_SetStickAxes(Sint16 x, Sint16 y) {
+static void BarrelPad_SetStickAxes(Sint16 x, Sint16 y) {
     /* Convert SDL-style axes (±32767, +y down) to N64 ±80, +y up. */
     int sx = (int)x * 80 / 32767;
     int sy = -(int)y * 80 / 32767;
@@ -240,36 +240,36 @@ static void ChimpPad_SetStickAxes(Sint16 x, Sint16 y) {
     if (sy > -8 && sy < 8) sy = 0;
     sStickX = sx;
     sStickY = sy;
-    ChimpPad_PublishPad();
+    BarrelPad_PublishPad();
     if (sVirtualJoystick != nullptr) {
         SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTX, x);
         SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTY, y);
     }
 }
 
-static void ChimpPad_AttachVirtualController(void) {
+static void BarrelPad_AttachVirtualController(void) {
     if (sVirtualJoystick != nullptr) {
         return;
     }
     sVirtualDeviceIndex = SDL_JoystickAttachVirtual(
         SDL_JOYSTICK_TYPE_GAMECONTROLLER, 6, 16, 0);
     if (sVirtualDeviceIndex < 0) {
-        ChimpPad_Log("virtual joystick attach failed: %s", SDL_GetError());
+        BarrelPad_Log("virtual joystick attach failed: %s", SDL_GetError());
         return;
     }
     sVirtualJoystick = SDL_JoystickOpen(sVirtualDeviceIndex);
     if (sVirtualJoystick == nullptr) {
-        ChimpPad_Log("virtual joystick open failed: %s", SDL_GetError());
+        BarrelPad_Log("virtual joystick open failed: %s", SDL_GetError());
         return;
     }
-    ChimpPad_Log("virtual controller attached index=%d", sVirtualDeviceIndex);
+    BarrelPad_Log("virtual controller attached index=%d", sVirtualDeviceIndex);
 }
 
-static void ChimpPad_ResetAllInputs(void) {
-    for (int a = 0; a < kChimpPadActionCount; ++a) {
+static void BarrelPad_ResetAllInputs(void) {
+    for (int a = 0; a < kBarrelPadActionCount; ++a) {
         if (sActionPressCounts[a] > 0) {
             sActionPressCounts[a] = 0;
-            ChimpPad_EmitAction((ChimpPadAction)a, NO);
+            BarrelPad_EmitAction((BarrelPadAction)a, NO);
         }
     }
     sHeldButtons = 0;
@@ -286,8 +286,8 @@ static void ChimpPad_ResetAllInputs(void) {
     sTouchStickActive.store(false);
 }
 
-@interface ChimpPadTouchButton : UIButton
-@property(nonatomic) ChimpPadAction action;
+@interface BarrelPadTouchButton : UIButton
+@property(nonatomic) BarrelPadAction action;
 @property(nonatomic) BOOL inputPressed;
 @property(nonatomic) BOOL outputPressed;
 @property(nonatomic) BOOL holdAssistEnabled;
@@ -299,15 +299,15 @@ static void ChimpPad_ResetAllInputs(void) {
 @property(nonatomic, strong) UIColor *idleColor;
 @property(nonatomic, strong) UIColor *pressedColor;
 - (instancetype)initWithLabel:(NSString *)label
-                       action:(ChimpPadAction)action
+                       action:(BarrelPadAction)action
                          pill:(BOOL)pill;
 - (void)applyIdleColor:(UIColor *)idle pressedColor:(UIColor *)pressed;
 - (void)cancelInput;
 @end
 
-@implementation ChimpPadTouchButton
+@implementation BarrelPadTouchButton
 - (instancetype)initWithLabel:(NSString *)label
-                       action:(ChimpPadAction)action
+                       action:(BarrelPadAction)action
                          pill:(BOOL)pill {
     self = [super initWithFrame:CGRectZero];
     if (self) {
@@ -360,7 +360,7 @@ static void ChimpPad_ResetAllInputs(void) {
     self.inputDownTime = CACurrentMediaTime();
     [self updateOutput];
     [self updateAppearance];
-    if (self.holdAssistEnabled && !wasLocked && self.action == kChimpPadActionA &&
+    if (self.holdAssistEnabled && !wasLocked && self.action == kBarrelPadActionA &&
         sGameplayActive.load()) {
         NSUInteger generation = self.releaseGeneration;
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.65 * NSEC_PER_SEC)),
@@ -376,7 +376,7 @@ static void ChimpPad_ResetAllInputs(void) {
                                [[UIImpactFeedbackGenerator alloc]
                                    initWithStyle:UIImpactFeedbackStyleMedium];
                            [fb impactOccurred];
-                           ChimpPad_Log("A hold assist locked");
+                           BarrelPad_Log("A hold assist locked");
                        });
     }
 }
@@ -395,7 +395,7 @@ static void ChimpPad_ResetAllInputs(void) {
         return;
     }
     /* SpaghettiPad: guarantee a minimum press window so short taps register. */
-    if (self.action != kChimpPadActionMenu) {
+    if (self.action != kBarrelPadActionMenu) {
         CFTimeInterval remaining =
             MAX(0.0, 0.05 - (CACurrentMediaTime() - self.inputDownTime));
         if (remaining > 0.0) {
@@ -419,7 +419,7 @@ static void ChimpPad_ResetAllInputs(void) {
         return;
     }
     self.outputPressed = shouldPress;
-    ChimpPad_SetAction(self.action, shouldPress);
+    BarrelPad_SetAction(self.action, shouldPress);
 }
 
 - (void)updateAppearance {
@@ -454,12 +454,12 @@ static void ChimpPad_ResetAllInputs(void) {
 }
 @end
 
-@interface ChimpPadTouchStick : UIView
+@interface BarrelPadTouchStick : UIView
 @property(nonatomic, strong) UIView *knob;
 - (void)cancelInput;
 @end
 
-@implementation ChimpPadTouchStick
+@implementation BarrelPadTouchStick
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (self) {
@@ -514,7 +514,7 @@ static void ChimpPad_ResetAllInputs(void) {
         MAX(-1.0, MIN(1.0, (double)(dx / radius))) * SDL_JOYSTICK_AXIS_MAX);
     Sint16 y = (Sint16)lround(
         MAX(-1.0, MIN(1.0, (double)(dy / radius))) * SDL_JOYSTICK_AXIS_MAX);
-    ChimpPad_SetStickAxes(x, y);
+    BarrelPad_SetStickAxes(x, y);
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
@@ -546,7 +546,7 @@ static void ChimpPad_ResetAllInputs(void) {
 - (void)cancelInput {
     sStickX = 0;
     sStickY = 0;
-    ChimpPad_PublishPad();
+    BarrelPad_PublishPad();
     if (sVirtualJoystick != nullptr) {
         SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTX, 0);
         SDL_JoystickSetVirtualAxis(sVirtualJoystick, SDL_CONTROLLER_AXIS_LEFTY, 0);
@@ -566,77 +566,108 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
                       safe.top + 4.0, size, size);
 }
 
-@interface ChimpPadTouchOverlay : UIView
-@property(nonatomic, strong) ChimpPadTouchStick *stick;
-@property(nonatomic, strong) NSArray<ChimpPadTouchButton *> *buttons;
-@property(nonatomic, strong) ChimpPadTouchButton *buttonA;
-@property(nonatomic, strong) ChimpPadTouchButton *buttonB;
-@property(nonatomic, strong) ChimpPadTouchButton *buttonL;
-@property(nonatomic, strong) ChimpPadTouchButton *buttonZLeft;
-@property(nonatomic, strong) ChimpPadTouchButton *buttonZRight;
-@property(nonatomic, strong) ChimpPadTouchButton *buttonR;
-@property(nonatomic, strong) ChimpPadTouchButton *buttonStart;
-@property(nonatomic, strong) ChimpPadTouchButton *cUp;
-@property(nonatomic, strong) ChimpPadTouchButton *cDown;
-@property(nonatomic, strong) ChimpPadTouchButton *cLeft;
-@property(nonatomic, strong) ChimpPadTouchButton *cRight;
-@property(nonatomic, strong) ChimpPadTouchButton *menuButton;
+static NSDictionary<NSString *, NSArray<NSNumber *> *> *
+BarrelPad_DefaultPhoneCenters(void) {
+    static NSDictionary<NSString *, NSArray<NSNumber *> *> *centers;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      /* Accepted on an iPhone 14 in landscape. Normalized centers keep the
+       * same thumb-reach layout across supported phone screen sizes. */
+      centers = @{
+          @"a" : @[ @0.8755924170616114, @0.8051282051282052 ],
+          @"b" : @[ @0.8084518167456555, @0.7529914529914529 ],
+          @"c-down" : @[ @0.8815165876777250, @0.4350427350427350 ],
+          @"c-left" : @[ @0.8467614533965245, @0.3555555555555555 ],
+          @"c-right" : @[ @0.9170616113744076, @0.3555555555555555 ],
+          @"c-up" : @[ @0.8838862559241706, @0.2692307692307693 ],
+          @"l" : @[ @0.09794628751974722, @0.5777777777777777 ],
+          @"r" : @[ @0.9079778830963665, @0.6786324786324788 ],
+          @"start" : @[ @0.8416271721958924, @0.07777777777777758 ],
+          @"stick" : @[ @0.1595576619273302, @0.7948717948717948 ],
+          @"z-left" : @[ @0.1563981042654028, @0.5786324786324787 ],
+          @"z-right" : @[ @0.8507109004739336, @0.6487179487179486 ],
+      };
+    });
+    return centers;
+}
+
+static void BarrelPad_RestoreTouchInputAfterEditing(void);
+
+@interface BarrelPadTouchOverlay : UIView
+@property(nonatomic, strong) BarrelPadTouchStick *stick;
+@property(nonatomic, strong) NSArray<BarrelPadTouchButton *> *buttons;
+@property(nonatomic, strong) BarrelPadTouchButton *buttonA;
+@property(nonatomic, strong) BarrelPadTouchButton *buttonB;
+@property(nonatomic, strong) BarrelPadTouchButton *buttonL;
+@property(nonatomic, strong) BarrelPadTouchButton *buttonZLeft;
+@property(nonatomic, strong) BarrelPadTouchButton *buttonZRight;
+@property(nonatomic, strong) BarrelPadTouchButton *buttonR;
+@property(nonatomic, strong) BarrelPadTouchButton *buttonStart;
+@property(nonatomic, strong) BarrelPadTouchButton *cUp;
+@property(nonatomic, strong) BarrelPadTouchButton *cDown;
+@property(nonatomic, strong) BarrelPadTouchButton *cLeft;
+@property(nonatomic, strong) BarrelPadTouchButton *cRight;
+@property(nonatomic, strong) BarrelPadTouchButton *menuButton;
 @property(nonatomic, strong) NSArray<UIView *> *editableControls;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *layoutCenters;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *layoutScales;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, NSValue *> *defaultSizes;
 @property(nonatomic, copy) NSString *layoutProfile;
 @property(nonatomic) BOOL layoutEditing;
+@property(nonatomic, assign) UIView *selectedControl;
 @property(nonatomic, strong) UIView *editorPanel;
 @property(nonatomic, strong) UILabel *editorLabel;
+@property(nonatomic, strong) UISlider *sizeSlider;
 @property(nonatomic, strong) UIButton *resetButton;
 @property(nonatomic, strong) UIButton *doneButton;
 - (void)cancelAllInputs;
 - (void)beginLayoutEditing;
 @end
 
-@implementation ChimpPadTouchOverlay
+@implementation BarrelPadTouchOverlay
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (self) {
         self.backgroundColor = UIColor.clearColor;
         self.multipleTouchEnabled = YES;
-        self.stick = [[ChimpPadTouchStick alloc] initWithFrame:CGRectZero];
-        self.buttonA = [[ChimpPadTouchButton alloc] initWithLabel:@"A"
-                                                           action:kChimpPadActionA
+        self.stick = [[BarrelPadTouchStick alloc] initWithFrame:CGRectZero];
+        self.buttonA = [[BarrelPadTouchButton alloc] initWithLabel:@"A"
+                                                           action:kBarrelPadActionA
                                                              pill:NO];
         self.buttonA.holdAssistEnabled = YES;
-        self.buttonB = [[ChimpPadTouchButton alloc] initWithLabel:@"B"
-                                                           action:kChimpPadActionB
+        self.buttonB = [[BarrelPadTouchButton alloc] initWithLabel:@"B"
+                                                           action:kBarrelPadActionB
                                                              pill:NO];
-        self.buttonL = [[ChimpPadTouchButton alloc] initWithLabel:@"L"
-                                                           action:kChimpPadActionL
+        self.buttonL = [[BarrelPadTouchButton alloc] initWithLabel:@"L"
+                                                           action:kBarrelPadActionL
                                                              pill:NO];
         /* Dual Z like SpaghettiPad: left thumb (item near stick) + right face. */
-        self.buttonZLeft = [[ChimpPadTouchButton alloc] initWithLabel:@"Z"
-                                                               action:kChimpPadActionZ
+        self.buttonZLeft = [[BarrelPadTouchButton alloc] initWithLabel:@"Z"
+                                                               action:kBarrelPadActionZ
                                                                  pill:NO];
-        self.buttonZRight = [[ChimpPadTouchButton alloc] initWithLabel:@"Z"
-                                                                action:kChimpPadActionZ
+        self.buttonZRight = [[BarrelPadTouchButton alloc] initWithLabel:@"Z"
+                                                                action:kBarrelPadActionZ
                                                                   pill:NO];
-        self.buttonR = [[ChimpPadTouchButton alloc] initWithLabel:@"R"
-                                                           action:kChimpPadActionR
+        self.buttonR = [[BarrelPadTouchButton alloc] initWithLabel:@"R"
+                                                           action:kBarrelPadActionR
                                                              pill:NO];
-        self.buttonStart = [[ChimpPadTouchButton alloc] initWithLabel:@"▶"
-                                                               action:kChimpPadActionStart
+        self.buttonStart = [[BarrelPadTouchButton alloc] initWithLabel:@"▶"
+                                                               action:kBarrelPadActionStart
                                                                  pill:NO];
-        self.cUp = [[ChimpPadTouchButton alloc] initWithLabel:@"▲"
-                                                       action:kChimpPadActionCUp
+        self.cUp = [[BarrelPadTouchButton alloc] initWithLabel:@"▲"
+                                                       action:kBarrelPadActionCUp
                                                          pill:NO];
-        self.cDown = [[ChimpPadTouchButton alloc] initWithLabel:@"▼"
-                                                         action:kChimpPadActionCDown
+        self.cDown = [[BarrelPadTouchButton alloc] initWithLabel:@"▼"
+                                                         action:kBarrelPadActionCDown
                                                            pill:NO];
-        self.cLeft = [[ChimpPadTouchButton alloc] initWithLabel:@"◀"
-                                                         action:kChimpPadActionCLeft
+        self.cLeft = [[BarrelPadTouchButton alloc] initWithLabel:@"◀"
+                                                         action:kBarrelPadActionCLeft
                                                            pill:NO];
-        self.cRight = [[ChimpPadTouchButton alloc] initWithLabel:@"▶"
-                                                          action:kChimpPadActionCRight
+        self.cRight = [[BarrelPadTouchButton alloc] initWithLabel:@"▶"
+                                                          action:kBarrelPadActionCRight
                                                             pill:NO];
-        self.menuButton = [[ChimpPadTouchButton alloc] initWithLabel:@"•••"
-                                                              action:kChimpPadActionMenu
+        self.menuButton = [[BarrelPadTouchButton alloc] initWithLabel:@"•••"
+                                                              action:kBarrelPadActionMenu
                                                                 pill:YES];
 
         [self.buttonA
@@ -650,7 +681,7 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
               pressedColor:[UIColor colorWithRed:0.94 green:0.22 blue:0.26 alpha:0.88]];
         UIColor *cIdle = [UIColor colorWithRed:0.95 green:0.67 blue:0.12 alpha:0.48];
         UIColor *cPressed = [UIColor colorWithRed:1.00 green:0.78 blue:0.20 alpha:0.86];
-        for (ChimpPadTouchButton *b in @[ self.cUp, self.cDown, self.cLeft, self.cRight ]) {
+        for (BarrelPadTouchButton *b in @[ self.cUp, self.cDown, self.cLeft, self.cRight ]) {
             [b applyIdleColor:cIdle pressedColor:cPressed];
         }
 
@@ -683,7 +714,7 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
             self.menuButton
         ];
         [self addSubview:self.stick];
-        for (ChimpPadTouchButton *b in self.buttons) {
+        for (BarrelPadTouchButton *b in self.buttons) {
             [self addSubview:b];
         }
 
@@ -693,6 +724,8 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
             self.cUp, self.cDown, self.cLeft, self.cRight,
         ];
         self.layoutCenters = [NSMutableDictionary dictionary];
+        self.layoutScales = [NSMutableDictionary dictionary];
+        self.defaultSizes = [NSMutableDictionary dictionary];
 
         self.editorPanel = [[UIView alloc] initWithFrame:CGRectZero];
         self.editorPanel.backgroundColor =
@@ -704,11 +737,22 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
         self.editorPanel.hidden = YES;
 
         self.editorLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-        self.editorLabel.text = @"Drag controls to move them";
+        self.editorLabel.text = @"Select a control";
         self.editorLabel.textColor = UIColor.whiteColor;
         self.editorLabel.font =
             [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
         [self.editorPanel addSubview:self.editorLabel];
+
+        self.sizeSlider = [[UISlider alloc] initWithFrame:CGRectZero];
+        self.sizeSlider.minimumValue = 0.70f;
+        self.sizeSlider.maximumValue = 1.50f;
+        self.sizeSlider.value = 1.0f;
+        self.sizeSlider.continuous = YES;
+        self.sizeSlider.minimumTrackTintColor =
+            [UIColor colorWithRed:0.10 green:0.48 blue:0.92 alpha:1.0];
+        [self.sizeSlider addTarget:self action:@selector(editorSizeChanged:)
+                  forControlEvents:UIControlEventValueChanged];
+        [self.editorPanel addSubview:self.sizeSlider];
 
         self.resetButton = [UIButton buttonWithType:UIButtonTypeSystem];
         [self.resetButton setTitle:@"Reset" forState:UIControlStateNormal];
@@ -737,6 +781,12 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
             pan.enabled = NO;
             pan.cancelsTouchesInView = YES;
             [control addGestureRecognizer:pan];
+            UITapGestureRecognizer *tap =
+                [[UITapGestureRecognizer alloc] initWithTarget:self
+                                                        action:@selector(selectControlGesture:)];
+            tap.enabled = NO;
+            tap.cancelsTouchesInView = YES;
+            [control addGestureRecognizer:tap];
         }
     }
     return self;
@@ -819,7 +869,7 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
         self.cLeft.frame = CP_Frame(CGPointMake(cX - cRadius, cY), cSize, cSize);
         self.cRight.frame = CP_Frame(CGPointMake(cX + cRadius, cY), cSize, cSize);
 
-        for (ChimpPadTouchButton *button in self.buttons) {
+        for (BarrelPadTouchButton *button in self.buttons) {
             button.titleLabel.font =
                 [UIFont systemFontOfSize:14.0 * s weight:UIFontWeightSemibold];
         }
@@ -894,7 +944,7 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
     self.cRight.frame = CP_Frame(CGPointMake(cCenter.x + cRadius, cCenter.y), cSize, cSize);
 
     CGFloat labelSize = 18.0 * scale;
-    for (ChimpPadTouchButton *button in self.buttons) {
+    for (BarrelPadTouchButton *button in self.buttons) {
         button.titleLabel.font =
             [UIFont systemFontOfSize:labelSize weight:UIFontWeightSemibold];
     }
@@ -910,7 +960,7 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
 }
 
 - (NSString *)storageKeyForProfile:(NSString *)profile {
-    return [@"ChimpPad.TouchLayout." stringByAppendingString:profile];
+    return [@"BarrelPad.TouchLayout." stringByAppendingString:profile];
 }
 
 - (void)loadLayoutForProfile:(NSString *)profile {
@@ -919,11 +969,16 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
     }
     self.layoutProfile = profile;
     [self.layoutCenters removeAllObjects];
+    [self.layoutScales removeAllObjects];
     NSDictionary *stored = [NSUserDefaults.standardUserDefaults
         dictionaryForKey:[self storageKeyForProfile:profile]];
     NSDictionary *centers = stored[@"centers"];
     if ([centers isKindOfClass:NSDictionary.class]) {
         [self.layoutCenters addEntriesFromDictionary:centers];
+    }
+    NSDictionary *scales = stored[@"scales"];
+    if ([scales isKindOfClass:NSDictionary.class]) {
+        [self.layoutScales addEntriesFromDictionary:scales];
     }
 }
 
@@ -945,11 +1000,12 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
         return;
     }
     UIEdgeInsets safe = self.safeAreaInsets;
-    CGFloat width = MIN(480.0,
+    CGFloat width = MIN(620.0,
         CGRectGetWidth(self.bounds) - safe.left - safe.right - 24.0);
     self.editorPanel.frame = CGRectMake(
         CGRectGetMidX(self.bounds) - width * 0.5, safe.top + 8.0, width, 58.0);
-    self.editorLabel.frame = CGRectMake(14.0, 0.0, width - 190.0, 58.0);
+    self.editorLabel.frame = CGRectMake(14.0, 0.0, 150.0, 58.0);
+    self.sizeSlider.frame = CGRectMake(170.0, 0.0, width - 350.0, 58.0);
     self.resetButton.frame = CGRectMake(width - 168.0, 8.0, 74.0, 42.0);
     self.doneButton.frame = CGRectMake(width - 86.0, 8.0, 74.0, 42.0);
 }
@@ -959,7 +1015,19 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
     CGFloat width = CGRectGetWidth(self.bounds);
     CGFloat height = CGRectGetHeight(self.bounds);
     for (UIView *control in self.editableControls) {
-        NSArray<NSNumber *> *center = self.layoutCenters[control.accessibilityIdentifier];
+        NSString *key = control.accessibilityIdentifier;
+        CGSize baseSize = control.bounds.size;
+        self.defaultSizes[key] = [NSValue valueWithCGSize:baseSize];
+        CGFloat controlScale = self.layoutScales[key] == nil
+            ? 1.0
+            : MIN(MAX(self.layoutScales[key].doubleValue, 0.70), 1.50);
+        control.bounds = CGRectMake(
+            0.0, 0.0, baseSize.width * controlScale,
+            baseSize.height * controlScale);
+        NSArray<NSNumber *> *center = self.layoutCenters[key];
+        if (center == nil && compact) {
+            center = BarrelPad_DefaultPhoneCenters()[key];
+        }
         if ([center isKindOfClass:NSArray.class] && center.count == 2) {
             control.center = CGPointMake(
                 center[0].doubleValue * width,
@@ -968,8 +1036,9 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
         [self clampControlToSafeBounds:control];
         control.layer.shadowColor =
             [UIColor colorWithRed:1.0 green:0.78 blue:0.16 alpha:1.0].CGColor;
-        control.layer.shadowRadius = self.layoutEditing ? 6.0 : 0.0;
-        control.layer.shadowOpacity = self.layoutEditing ? 0.9 : 0.0;
+        BOOL selected = self.layoutEditing && control == self.selectedControl;
+        control.layer.shadowRadius = selected ? 8.0 : 0.0;
+        control.layer.shadowOpacity = selected ? 1.0 : 0.0;
         control.layer.shadowOffset = CGSizeZero;
     }
     [self layoutEditorPanel];
@@ -983,14 +1052,40 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
         return;
     }
     [NSUserDefaults.standardUserDefaults
-        setObject:@{ @"centers": [self.layoutCenters copy] }
+        setObject:@{
+            @"centers": [self.layoutCenters copy],
+            @"scales": [self.layoutScales copy],
+        }
            forKey:[self storageKeyForProfile:self.layoutProfile]];
+}
+
+- (void)selectControl:(UIView *)control {
+    if (!self.layoutEditing || control == nil) {
+        return;
+    }
+    self.selectedControl = control;
+    NSString *key = control.accessibilityIdentifier;
+    CGFloat scale = self.layoutScales[key] == nil
+        ? 1.0 : self.layoutScales[key].floatValue;
+    self.sizeSlider.value = scale;
+    NSString *name = control.accessibilityLabel.length > 0
+        ? control.accessibilityLabel : key;
+    self.editorLabel.text =
+        [NSString stringWithFormat:@"%@  %.2fx", name, (double)scale];
+    [self setNeedsLayout];
+}
+
+- (void)selectControlGesture:(UITapGestureRecognizer *)gesture {
+    [self selectControl:gesture.view];
 }
 
 - (void)moveControl:(UIPanGestureRecognizer *)gesture {
     UIView *control = gesture.view;
     if (!self.layoutEditing || control == nil) {
         return;
+    }
+    if (gesture.state == UIGestureRecognizerStateBegan) {
+        [self selectControl:control];
     }
     CGPoint delta = [gesture translationInView:self];
     control.center = CGPointMake(control.center.x + delta.x,
@@ -1003,10 +1098,42 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
     ];
 }
 
+- (void)editorSizeChanged:(UISlider *)slider {
+    UIView *control = self.selectedControl;
+    NSString *key = control.accessibilityIdentifier;
+    NSValue *baseValue = self.defaultSizes[key];
+    if (!self.layoutEditing || control == nil || key.length == 0 || baseValue == nil) {
+        return;
+    }
+    CGFloat scale = MIN(MAX(slider.value, 0.70f), 1.50f);
+    self.layoutScales[key] = @(scale);
+    CGSize baseSize = baseValue.CGSizeValue;
+    control.bounds = CGRectMake(
+        0.0, 0.0, baseSize.width * scale, baseSize.height * scale);
+    [self clampControlToSafeBounds:control];
+    self.layoutCenters[key] = @[
+        @(control.center.x / CGRectGetWidth(self.bounds)),
+        @(control.center.y / CGRectGetHeight(self.bounds)),
+    ];
+    NSString *name = control.accessibilityLabel.length > 0
+        ? control.accessibilityLabel : key;
+    self.editorLabel.text =
+        [NSString stringWithFormat:@"%@  %.2fx", name, (double)scale];
+    [self setNeedsLayout];
+}
+
 - (void)resetCurrentLayout {
     [self.layoutCenters removeAllObjects];
+    [self.layoutScales removeAllObjects];
     [NSUserDefaults.standardUserDefaults
         removeObjectForKey:[self storageKeyForProfile:self.layoutProfile]];
+    self.sizeSlider.value = 1.0f;
+    NSString *name = self.selectedControl.accessibilityLabel.length > 0
+        ? self.selectedControl.accessibilityLabel
+        : self.selectedControl.accessibilityIdentifier;
+    self.editorLabel.text = name.length > 0
+        ? [NSString stringWithFormat:@"%@  1.00x", name]
+        : @"Select a control";
     [self setNeedsLayout];
 }
 
@@ -1019,15 +1146,17 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
     self.layoutEditing = YES;
     for (UIView *control in self.editableControls) {
         for (UIGestureRecognizer *gesture in control.gestureRecognizers) {
-            if ([gesture isKindOfClass:UIPanGestureRecognizer.class]) {
+            if ([gesture isKindOfClass:UIPanGestureRecognizer.class] ||
+                [gesture isKindOfClass:UITapGestureRecognizer.class]) {
                 gesture.enabled = YES;
             }
         }
     }
     self.editorPanel.hidden = NO;
     self.menuButton.hidden = YES;
+    [self selectControl:self.buttonA];
     [self setNeedsLayout];
-    ChimpPad_Log("touch layout editor opened");
+    BarrelPad_Log("touch layout editor opened");
 }
 
 - (void)endLayoutEditing {
@@ -1039,20 +1168,23 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
     sLayoutEditorActive = NO;
     for (UIView *control in self.editableControls) {
         for (UIGestureRecognizer *gesture in control.gestureRecognizers) {
-            if ([gesture isKindOfClass:UIPanGestureRecognizer.class]) {
+            if ([gesture isKindOfClass:UIPanGestureRecognizer.class] ||
+                [gesture isKindOfClass:UITapGestureRecognizer.class]) {
                 gesture.enabled = NO;
             }
         }
     }
     self.editorPanel.hidden = YES;
+    self.selectedControl = nil;
     self.menuButton.hidden = !sTouchControlsDesired;
+    BarrelPad_RestoreTouchInputAfterEditing();
     [self setNeedsLayout];
-    ChimpPad_Log("touch layout saved");
+    BarrelPad_Log("touch layout saved");
 }
 
 - (void)cancelAllInputs {
     [self.stick cancelInput];
-    for (ChimpPadTouchButton *b in self.buttons) {
+    for (BarrelPadTouchButton *b in self.buttons) {
         [b cancelInput];
     }
 }
@@ -1060,14 +1192,14 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
 
 
 
-static ChimpPadTouchOverlay *sOverlay;
+static BarrelPadTouchOverlay *sOverlay;
 
-static void ChimpPad_ApplyTouchControlsState(void) {
+static void BarrelPad_ApplyTouchControlsState(void) {
     if (sOverlay == nil) {
         return;
     }
     if (sLayoutEditorActive) {
-        for (ChimpPadTouchButton *b in sOverlay.buttons) {
+        for (BarrelPadTouchButton *b in sOverlay.buttons) {
             b.hidden = b == sOverlay.menuButton;
         }
         sOverlay.stick.hidden = NO;
@@ -1078,18 +1210,33 @@ static void ChimpPad_ApplyTouchControlsState(void) {
     /* Race controls hide while the host ImGui menu is open so they never sit
      * on top of it; the persistent ••• button stays reachable to come back.
      * Matches SpaghettiPad's "settings menu hides the race controls" design. */
-    for (ChimpPadTouchButton *b in sOverlay.buttons) {
+    for (BarrelPadTouchButton *b in sOverlay.buttons) {
         b.hidden = !show || menuOpen;
     }
     sOverlay.stick.hidden = !show || menuOpen;
     sOverlay.menuButton.hidden = !show;
     if (!show || menuOpen) {
         [sOverlay cancelAllInputs];
-        ChimpPad_ResetAllInputs();
+        BarrelPad_ResetAllInputs();
     }
 }
 
-static void ChimpPad_InstallOverlay(void) {
+static void BarrelPad_RestoreTouchInputAfterEditing(void) {
+    if (sOverlay == nil) {
+        return;
+    }
+    /* End editing at a hard input boundary: discard editor gestures and stale
+     * held state, restore the touch source, then rebuild visibility from the
+     * actual menu/touch preferences. This makes Done immediately playable. */
+    [sOverlay cancelAllInputs];
+    BarrelPad_ResetAllInputs();
+    sMenuVisible.store(false);
+    platform_ios_touch_set(0, 0, 0, sTouchControlsDesired ? 1 : 0);
+    BarrelPad_ApplyTouchControlsState();
+    BarrelPad_Log("touch input restored after layout editing");
+}
+
+static void BarrelPad_InstallOverlay(void) {
     if (sOverlay != nil || sSDLWindow == nil) {
         return;
     }
@@ -1098,7 +1245,7 @@ static void ChimpPad_InstallOverlay(void) {
     const float parsedScale = (float)std::atof(scaleText.c_str());
     sTouchControlScale = parsedScale < 0.5f ? 0.5f
                        : (parsedScale > 2.0f ? 2.0f : parsedScale);
-    sOverlay = [[ChimpPadTouchOverlay alloc] initWithFrame:sSDLWindow.bounds];
+    sOverlay = [[BarrelPadTouchOverlay alloc] initWithFrame:sSDLWindow.bounds];
     sOverlay.autoresizingMask =
         UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [sSDLWindow addSubview:sOverlay];
@@ -1106,13 +1253,13 @@ static void ChimpPad_InstallOverlay(void) {
     sOverlay.opaque = NO;
     sOverlay.alpha = 1.0;
     [sSDLWindow bringSubviewToFront:sOverlay];
-    ChimpPad_AttachVirtualController();
+    BarrelPad_AttachVirtualController();
     platform_ios_touch_set(0, 0, 0, 1);
-    ChimpPad_ApplyTouchControlsState();
-    ChimpPad_Log("touch overlay installed");
+    BarrelPad_ApplyTouchControlsState();
+    BarrelPad_Log("touch overlay installed");
 }
 
-void ChimpPad_OnWindowCreated(struct SDL_Window *window) {
+void BarrelPad_OnWindowCreated(struct SDL_Window *window) {
     if (window == nullptr) {
         return;
     }
@@ -1123,7 +1270,7 @@ void ChimpPad_OnWindowCreated(struct SDL_Window *window) {
         sSDLWindow = info.info.uikit.window;
 #endif
     } else {
-        ChimpPad_Log("SDL_GetWindowWMInfo failed: %s", SDL_GetError());
+        BarrelPad_Log("SDL_GetWindowWMInfo failed: %s", SDL_GetError());
     }
     if (sSDLWindow == nil) {
         /* Fallback: key window / first app window (Metal path race). */
@@ -1142,10 +1289,10 @@ void ChimpPad_OnWindowCreated(struct SDL_Window *window) {
                 }
             }
         }
-        ChimpPad_Log("UIKit window fallback used=%d", sSDLWindow != nil ? 1 : 0);
+        BarrelPad_Log("UIKit window fallback used=%d", sSDLWindow != nil ? 1 : 0);
     }
     if (sSDLWindow == nil) {
-        ChimpPad_Log("no UIKit window yet — retrying install shortly");
+        BarrelPad_Log("no UIKit window yet — retrying install shortly");
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             if (sSDLWindow == nil) {
@@ -1157,16 +1304,16 @@ void ChimpPad_OnWindowCreated(struct SDL_Window *window) {
                     }
                 }
             }
-            ChimpPad_InstallOverlay();
+            BarrelPad_InstallOverlay();
         });
         return;
     }
     dispatch_async(dispatch_get_main_queue(), ^{
-        ChimpPad_InstallOverlay();
+        BarrelPad_InstallOverlay();
     });
 }
 
-int ChimpPad_TouchControlsAvailable(void) {
+int BarrelPad_TouchControlsAvailable(void) {
 #if TARGET_OS_IOS
     return 1;
 #else
@@ -1174,29 +1321,29 @@ int ChimpPad_TouchControlsAvailable(void) {
 #endif
 }
 
-void ChimpPad_InitializeTouchControls(void) {
+void BarrelPad_InitializeTouchControls(void) {
     sTouchControlsDesired = YES;
-    ChimpPad_Log("initialize touch controls");
+    BarrelPad_Log("initialize touch controls");
     if (sSDLWindow != nil) {
-        ChimpPad_InstallOverlay();
+        BarrelPad_InstallOverlay();
     }
 }
 
-void ChimpPad_SetTouchControlsEnabled(int enabled) {
+void BarrelPad_SetTouchControlsEnabled(int enabled) {
     sTouchControlsDesired = enabled ? YES : NO;
-    ChimpPad_ApplyTouchControlsState();
+    BarrelPad_ApplyTouchControlsState();
 }
 
-void ChimpPad_SetGameplayActive(int active) {
+void BarrelPad_SetGameplayActive(int active) {
     sGameplayActive.store(active != 0);
     if (!active && sOverlay != nil) {
         [sOverlay cancelAllInputs];
     }
 }
 
-void ChimpPad_SetMenuVisible(int visible) {
+void BarrelPad_SetMenuVisible(int visible) {
     sMenuVisible.store(visible != 0);
-    ChimpPad_ApplyTouchControlsState();
+    BarrelPad_ApplyTouchControlsState();
 }
 
 /* Called by the host overlay (ui_overlay.cpp) whenever the ImGui menu opens or
@@ -1204,7 +1351,7 @@ void ChimpPad_SetMenuVisible(int visible) {
  * definition is what makes the hook live on iOS. */
 extern "C" void platform_ios_touch_menu_visible(int visible) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        ChimpPad_SetMenuVisible(visible);
+        BarrelPad_SetMenuVisible(visible);
     });
 }
 
@@ -1217,7 +1364,7 @@ extern "C" void platform_ios_touch_set_scale(float scale) {
         }
         sTouchControlScale = clamped;
         [sOverlay setNeedsLayout];
-        ChimpPad_Log("touch control scale=%.2f", (double)clamped);
+        BarrelPad_Log("touch control scale=%.2f", (double)clamped);
     });
 }
 
@@ -1240,16 +1387,16 @@ extern "C" void platform_ios_touch_set_preset(int preset) {
 
 extern "C" void platform_ios_touch_begin_edit(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        ChimpPad_SetMenuVisible(0);
+        BarrelPad_SetMenuVisible(0);
         [sOverlay beginLayoutEditing];
     });
 }
 
-void ChimpPad_BeginTouchLayoutEditing(void) {
+void BarrelPad_BeginTouchLayoutEditing(void) {
     platform_ios_touch_begin_edit();
 }
 
-float ChimpPad_RecommendedMenuScale(void) {
+float BarrelPad_RecommendedMenuScale(void) {
     if (sSDLWindow == nil) {
         return 1.0f;
     }

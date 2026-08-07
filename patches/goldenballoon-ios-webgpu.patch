@@ -5,7 +5,7 @@
              set(_supported FALSE)
          endif()
 +    elseif(os STREQUAL "iOS" AND _abi STREQUAL "apple")
-+        # ChimpPad: iOS Simulator prebuilts from wgpu-native v29.0.1.1
++        # BarrelPad: iOS Simulator prebuilts from wgpu-native v29.0.1.1
 +        if(DEFINED MDKR_IOS_SIMULATOR AND MDKR_IOS_SIMULATOR)
 +            if(_cpu MATCHES "^(arm64|aarch64)$")
 +                set(_asset "wgpu-ios-aarch64-simulator-release.zip")

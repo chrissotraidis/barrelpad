@@ -1,8 +1,8 @@
 # Extend Golden Balloon wgpu selection for iOS Simulator / device.
-# Include from ChimpPad iOS configure after copying into the host tree, or
+# Include from BarrelPad iOS configure after copying into the host tree, or
 # set MDKR_WGPU_* overrides before including stock webgpu.cmake.
 
-function(chimppad_select_wgpu_ios cpu simulator out_supported out_asset out_sha out_reason)
+function(barrelpad_select_wgpu_ios cpu simulator out_supported out_asset out_sha out_reason)
     string(TOLOWER "${cpu}" _cpu)
     set(_supported TRUE)
     set(_asset "")

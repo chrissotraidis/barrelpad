@@ -1,4 +1,4 @@
-# Building ChimpPad
+# Building BarrelPad
 
 ## Prerequisites
 
@@ -30,6 +30,17 @@ scripts/build-ios.sh --simulator --device-family phone
 scripts/build-ios.sh --simulator --device-family pad
 ```
 
+### Physical iPhone / iPad
+
+```sh
+scripts/build-ios.sh --device
+```
+
+This produces an unsigned `build-ios-device/BarrelPad.app`. Sign it with an
+Apple development identity and a provisioning profile whose application
+identifier matches the app's bundle identifier before installing it. Signing
+material is local and must never be committed.
+
 See [STATUS.md](STATUS.md) for which targets currently launch playably.
 
 ## What the scripts do
@@ -38,8 +49,8 @@ See [STATUS.md](STATUS.md) for which targets currently launch playably.
    (cloned from the pin in [DEPENDENCIES.md](DEPENDENCIES.md) if missing).
 2. Configure CMake (WebGPU ON for macOS when available; iOS uses the
    documented backend for that target).
-3. Build `mdkr64` / ChimpPad app product.
-4. Log loudly with `[ChimpPad]` prefixes during smoke runs.
+3. Build the `mdkr64` / BarrelPad app product.
+4. Log loudly with `[BarrelPad]` prefixes during smoke runs.
 
 ## Manual Golden Balloon build (debug)
 
@@ -58,7 +69,7 @@ cmake -S . -B build-gl -DMDKR_WEBGPU_BACKEND=OFF -DCMAKE_BUILD_TYPE=Release -G N
 
 ## ROM at runtime
 
-Pass `--rom <path>` or use the native launcher file picker. ChimpPad’s iOS
+Pass `--rom <path>` or use the native launcher file picker. BarrelPad’s iOS
 shell looks under the app Documents container and known dev paths; it never
 embeds the ROM in the bundle.
 
@@ -66,7 +77,8 @@ embeds the ROM in the bundle.
 
 ```sh
 scripts/test-unit.sh
-# or: cmake --build build --target chimppad_input_tests && ctest --test-dir build -R chimppad
+# or run the checked-in helper directly
+scripts/test-unit.sh
 ```
 
 ## iOS game boot
@@ -74,5 +86,5 @@ scripts/test-unit.sh
 `scripts/run-ios-sim.sh` copies the ROM into the app Documents container and
 sets `SIMCTL_CHILD_MDKR_ROM` + `SIMCTL_CHILD_MDKR_APP_AUTOPLAY=1` so the
 interactive AppHost boots Diddy Kong Racing with touch controls active.
-Bare `--rom` on desktop is the headless engine path; on iOS, ChimpPad
+Bare `--rom` on desktop is the headless engine path; on iOS, BarrelPad
 prefers autoplay so the overlay stays live.

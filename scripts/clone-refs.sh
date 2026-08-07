@@ -13,18 +13,18 @@ GB_PIN="${GB_PIN:-6fc93d886b090b22eb39d90fada535faa7282f2d}"
 clone_pin() {
   local name="$1" url="$2" pin="$3" dir="$REF/$name"
   if [ -d "$dir/.git" ]; then
-    echo "[ChimpPad] updating $name"
+    echo "[BarrelPad] updating $name"
     git -C "$dir" fetch --depth 1 origin "$pin" 2>/dev/null || \
       git -C "$dir" fetch --depth 1 origin
     git -C "$dir" checkout --detach "$pin" 2>/dev/null || \
       git -C "$dir" checkout --detach "origin/main" || true
   else
-    echo "[ChimpPad] cloning $name @ $pin"
+    echo "[BarrelPad] cloning $name @ $pin"
     git clone --depth 1 "$url" "$dir"
     git -C "$dir" fetch --depth 1 origin "$pin" 2>/dev/null || true
     git -C "$dir" checkout --detach "$pin" 2>/dev/null || true
   fi
-  echo "[ChimpPad] $name HEAD=$(git -C "$dir" rev-parse HEAD)"
+  echo "[BarrelPad] $name HEAD=$(git -C "$dir" rev-parse HEAD)"
 }
 
 clone_pin "diddy-kong-racing" "$DKR_URL" "$DKR_PIN"
@@ -34,9 +34,9 @@ clone_pin "goldenballoon" "$GB_URL" "$GB_PIN"
 SOURCES="$ROOT/sources"
 mkdir -p "$SOURCES"
 if [ ! -d "$SOURCES/goldenballoon/.git" ]; then
-  echo "[ChimpPad] mirroring goldenballoon into sources/"
+  echo "[BarrelPad] mirroring goldenballoon into sources/"
   git clone "$REF/goldenballoon" "$SOURCES/goldenballoon"
 fi
 git -C "$SOURCES/goldenballoon" checkout --detach "$GB_PIN" 2>/dev/null || true
 
-echo "[ChimpPad] refs ready"
+echo "[BarrelPad] refs ready"

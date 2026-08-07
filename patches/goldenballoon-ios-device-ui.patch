@@ -7,7 +7,7 @@ index c764c03..0d61dd7 100644
                  set(_supported FALSE)
              endif()
 +        elseif(_cpu MATCHES "^(arm64|aarch64)$")
-+            # ChimpPad: iOS device prebuilt from wgpu-native v29.0.1.1
++            # BarrelPad: iOS device prebuilt from wgpu-native v29.0.1.1
 +            set(_asset "wgpu-ios-aarch64-release.zip")
 +            set(_sha "e36c9913b9e5095a530fa9121c50b16a4e3dd020e1eebf601f2f47ce24d56941")
          else()
@@ -33,7 +33,7 @@ index 5d5f286..0b8e25e 100644
  static AppFonts g_fonts;
  static float      g_fbScale   = 1.0f;   // framebuffer/logical ratio from setup()
 +#if defined(__APPLE__) && TARGET_OS_IOS
-+// ChimpPad iPad: default the menu a touch smaller so it leaves more of the
++// BarrelPad iPad: default the menu a touch smaller so it leaves more of the
 +// race visible; the UI scale slider still ranges up to 2.0x.
 +static float      g_uiScale   = 0.9f;
 +#else
@@ -110,7 +110,7 @@ index 527d34c..edb9916 100644
 +#endif
 +
 +#if defined(__APPLE__) && TARGET_OS_IOS
-+/* ChimpPad: weak hook into the UIKit touch shell; NULL elsewhere. */
++/* BarrelPad: weak hook into the UIKit touch shell; NULL elsewhere. */
 +extern "C" __attribute__((weak)) void platform_ios_touch_set_scale(float scale);
 +#endif
 +
@@ -134,7 +134,7 @@ index 527d34c..edb9916 100644
                  "Supported range: 0.75x to 2.00x. For touch, use 1.25x or larger.");
          }
 +#if defined(__APPLE__) && TARGET_OS_IOS
-+        /* ChimpPad: on-screen touch overlay size. The UIKit shell owns the
++        /* BarrelPad: on-screen touch overlay size. The UIKit shell owns the
 +         * overlay; this row only persists the value and nudges it live. */
 +        if (!g_touchScaleInitialized) {
 +            g_touchScaleEdit = static_cast<float>(
