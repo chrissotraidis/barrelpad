@@ -13,6 +13,7 @@ void ChimpPad_SetTouchControlsEnabled(int enabled);
 void ChimpPad_SetGameplayActive(int active);
 void ChimpPad_SetMenuVisible(int visible);
 float ChimpPad_RecommendedMenuScale(void);
+void ChimpPad_BeginTouchLayoutEditing(void);
 
 /* Runtime logging helper used by shell and tests. */
 void ChimpPad_Log(const char *fmt, ...);

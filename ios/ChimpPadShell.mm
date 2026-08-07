@@ -33,6 +33,7 @@ static std::atomic_bool sMenuVisible(false);
 static std::atomic_bool sTouchStickActive(false);
 static std::atomic_bool sGameplayActive(true);
 static BOOL sTouchControlsDesired = YES;
+static BOOL sLayoutEditorActive = NO;
 /* Persistent player-facing touch overlay scale (0.5x-2.0x). Main-thread only;
  * written by platform_ios_touch_set_scale and read during layout. */
 static float sTouchControlScale = 1.0f;
@@ -346,6 +347,9 @@ static void ChimpPad_ResetAllInputs(void) {
 }
 
 - (void)inputDown {
+    if (sLayoutEditorActive) {
+        return;
+    }
     self.releaseGeneration += 1;
     if (self.inputPressed) {
         return;
@@ -514,6 +518,9 @@ static void ChimpPad_ResetAllInputs(void) {
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (sLayoutEditorActive) {
+        return;
+    }
     UITouch *touch = touches.anyObject;
     if (!touch) {
         return;
@@ -574,7 +581,16 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
 @property(nonatomic, strong) ChimpPadTouchButton *cLeft;
 @property(nonatomic, strong) ChimpPadTouchButton *cRight;
 @property(nonatomic, strong) ChimpPadTouchButton *menuButton;
+@property(nonatomic, strong) NSArray<UIView *> *editableControls;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *layoutCenters;
+@property(nonatomic, copy) NSString *layoutProfile;
+@property(nonatomic) BOOL layoutEditing;
+@property(nonatomic, strong) UIView *editorPanel;
+@property(nonatomic, strong) UILabel *editorLabel;
+@property(nonatomic, strong) UIButton *resetButton;
+@property(nonatomic, strong) UIButton *doneButton;
 - (void)cancelAllInputs;
+- (void)beginLayoutEditing;
 @end
 
 @implementation ChimpPadTouchOverlay
@@ -647,6 +663,20 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
         self.cRight.accessibilityLabel = @"C Right";
         self.menuButton.accessibilityLabel = @"Menu";
 
+        self.stick.accessibilityIdentifier = @"stick";
+        self.buttonA.accessibilityIdentifier = @"a";
+        self.buttonB.accessibilityIdentifier = @"b";
+        self.buttonL.accessibilityIdentifier = @"l";
+        self.buttonZLeft.accessibilityIdentifier = @"z-left";
+        self.buttonZRight.accessibilityIdentifier = @"z-right";
+        self.buttonR.accessibilityIdentifier = @"r";
+        self.buttonStart.accessibilityIdentifier = @"start";
+        self.cUp.accessibilityIdentifier = @"c-up";
+        self.cDown.accessibilityIdentifier = @"c-down";
+        self.cLeft.accessibilityIdentifier = @"c-left";
+        self.cRight.accessibilityIdentifier = @"c-right";
+        self.menuButton.accessibilityIdentifier = @"menu";
+
         self.buttons = @[
             self.buttonA, self.buttonB, self.buttonL, self.buttonZLeft, self.buttonZRight,
             self.buttonR, self.buttonStart, self.cUp, self.cDown, self.cLeft, self.cRight,
@@ -655,6 +685,58 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
         [self addSubview:self.stick];
         for (ChimpPadTouchButton *b in self.buttons) {
             [self addSubview:b];
+        }
+
+        self.editableControls = @[
+            self.stick, self.buttonA, self.buttonB, self.buttonL,
+            self.buttonZLeft, self.buttonZRight, self.buttonR, self.buttonStart,
+            self.cUp, self.cDown, self.cLeft, self.cRight,
+        ];
+        self.layoutCenters = [NSMutableDictionary dictionary];
+
+        self.editorPanel = [[UIView alloc] initWithFrame:CGRectZero];
+        self.editorPanel.backgroundColor =
+            [UIColor colorWithWhite:0.04 alpha:0.90];
+        self.editorPanel.layer.cornerRadius = 14.0;
+        self.editorPanel.layer.borderColor =
+            [UIColor colorWithWhite:1.0 alpha:0.55].CGColor;
+        self.editorPanel.layer.borderWidth = 1.5;
+        self.editorPanel.hidden = YES;
+
+        self.editorLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+        self.editorLabel.text = @"Drag controls to move them";
+        self.editorLabel.textColor = UIColor.whiteColor;
+        self.editorLabel.font =
+            [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
+        [self.editorPanel addSubview:self.editorLabel];
+
+        self.resetButton = [UIButton buttonWithType:UIButtonTypeSystem];
+        [self.resetButton setTitle:@"Reset" forState:UIControlStateNormal];
+        [self.resetButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+        self.resetButton.backgroundColor = [UIColor colorWithWhite:0.25 alpha:0.90];
+        self.resetButton.layer.cornerRadius = 10.0;
+        [self.resetButton addTarget:self action:@selector(resetCurrentLayout)
+                   forControlEvents:UIControlEventTouchUpInside];
+        [self.editorPanel addSubview:self.resetButton];
+
+        self.doneButton = [UIButton buttonWithType:UIButtonTypeSystem];
+        [self.doneButton setTitle:@"Done" forState:UIControlStateNormal];
+        [self.doneButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+        self.doneButton.backgroundColor =
+            [UIColor colorWithRed:0.10 green:0.48 blue:0.92 alpha:0.92];
+        self.doneButton.layer.cornerRadius = 10.0;
+        [self.doneButton addTarget:self action:@selector(endLayoutEditing)
+                  forControlEvents:UIControlEventTouchUpInside];
+        [self.editorPanel addSubview:self.doneButton];
+        [self addSubview:self.editorPanel];
+
+        for (UIView *control in self.editableControls) {
+            UIPanGestureRecognizer *pan =
+                [[UIPanGestureRecognizer alloc] initWithTarget:self
+                                                        action:@selector(moveControl:)];
+            pan.enabled = NO;
+            pan.cancelsTouchesInView = YES;
+            [control addGestureRecognizer:pan];
         }
     }
     return self;
@@ -747,6 +829,7 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
             [UIFont systemFontOfSize:16.0 * s weight:UIFontWeightBold];
         self.buttonStart.titleLabel.font =
             [UIFont systemFontOfSize:14.0 * s weight:UIFontWeightBold];
+        [self finishControlLayoutForCompact:YES];
         return;
     }
 
@@ -819,6 +902,152 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
         [UIFont systemFontOfSize:18.0 * scale weight:UIFontWeightBold];
     self.buttonA.titleLabel.font =
         [UIFont systemFontOfSize:20.0 * scale weight:UIFontWeightBold];
+    [self finishControlLayoutForCompact:NO];
+}
+
+- (NSString *)profileForCompact:(BOOL)compact {
+    return compact ? @"phone-v1" : @"tablet-v1";
+}
+
+- (NSString *)storageKeyForProfile:(NSString *)profile {
+    return [@"ChimpPad.TouchLayout." stringByAppendingString:profile];
+}
+
+- (void)loadLayoutForProfile:(NSString *)profile {
+    if ([self.layoutProfile isEqualToString:profile]) {
+        return;
+    }
+    self.layoutProfile = profile;
+    [self.layoutCenters removeAllObjects];
+    NSDictionary *stored = [NSUserDefaults.standardUserDefaults
+        dictionaryForKey:[self storageKeyForProfile:profile]];
+    NSDictionary *centers = stored[@"centers"];
+    if ([centers isKindOfClass:NSDictionary.class]) {
+        [self.layoutCenters addEntriesFromDictionary:centers];
+    }
+}
+
+- (void)clampControlToSafeBounds:(UIView *)control {
+    UIEdgeInsets safe = self.safeAreaInsets;
+    CGFloat halfW = CGRectGetWidth(control.bounds) * 0.5;
+    CGFloat halfH = CGRectGetHeight(control.bounds) * 0.5;
+    CGFloat minX = safe.left + halfW + 4.0;
+    CGFloat maxX = CGRectGetWidth(self.bounds) - safe.right - halfW - 4.0;
+    CGFloat minY = safe.top + halfH + 4.0;
+    CGFloat maxY = CGRectGetHeight(self.bounds) - safe.bottom - halfH - 4.0;
+    control.center = CGPointMake(
+        MIN(MAX(control.center.x, minX), MAX(minX, maxX)),
+        MIN(MAX(control.center.y, minY), MAX(minY, maxY)));
+}
+
+- (void)layoutEditorPanel {
+    if (self.editorPanel.hidden) {
+        return;
+    }
+    UIEdgeInsets safe = self.safeAreaInsets;
+    CGFloat width = MIN(480.0,
+        CGRectGetWidth(self.bounds) - safe.left - safe.right - 24.0);
+    self.editorPanel.frame = CGRectMake(
+        CGRectGetMidX(self.bounds) - width * 0.5, safe.top + 8.0, width, 58.0);
+    self.editorLabel.frame = CGRectMake(14.0, 0.0, width - 190.0, 58.0);
+    self.resetButton.frame = CGRectMake(width - 168.0, 8.0, 74.0, 42.0);
+    self.doneButton.frame = CGRectMake(width - 86.0, 8.0, 74.0, 42.0);
+}
+
+- (void)finishControlLayoutForCompact:(BOOL)compact {
+    [self loadLayoutForProfile:[self profileForCompact:compact]];
+    CGFloat width = CGRectGetWidth(self.bounds);
+    CGFloat height = CGRectGetHeight(self.bounds);
+    for (UIView *control in self.editableControls) {
+        NSArray<NSNumber *> *center = self.layoutCenters[control.accessibilityIdentifier];
+        if ([center isKindOfClass:NSArray.class] && center.count == 2) {
+            control.center = CGPointMake(
+                center[0].doubleValue * width,
+                center[1].doubleValue * height);
+        }
+        [self clampControlToSafeBounds:control];
+        control.layer.shadowColor =
+            [UIColor colorWithRed:1.0 green:0.78 blue:0.16 alpha:1.0].CGColor;
+        control.layer.shadowRadius = self.layoutEditing ? 6.0 : 0.0;
+        control.layer.shadowOpacity = self.layoutEditing ? 0.9 : 0.0;
+        control.layer.shadowOffset = CGSizeZero;
+    }
+    [self layoutEditorPanel];
+    if (self.layoutEditing) {
+        [self bringSubviewToFront:self.editorPanel];
+    }
+}
+
+- (void)saveCurrentLayout {
+    if (self.layoutProfile.length == 0) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults
+        setObject:@{ @"centers": [self.layoutCenters copy] }
+           forKey:[self storageKeyForProfile:self.layoutProfile]];
+}
+
+- (void)moveControl:(UIPanGestureRecognizer *)gesture {
+    UIView *control = gesture.view;
+    if (!self.layoutEditing || control == nil) {
+        return;
+    }
+    CGPoint delta = [gesture translationInView:self];
+    control.center = CGPointMake(control.center.x + delta.x,
+                                 control.center.y + delta.y);
+    [gesture setTranslation:CGPointZero inView:self];
+    [self clampControlToSafeBounds:control];
+    self.layoutCenters[control.accessibilityIdentifier] = @[
+        @(control.center.x / CGRectGetWidth(self.bounds)),
+        @(control.center.y / CGRectGetHeight(self.bounds)),
+    ];
+}
+
+- (void)resetCurrentLayout {
+    [self.layoutCenters removeAllObjects];
+    [NSUserDefaults.standardUserDefaults
+        removeObjectForKey:[self storageKeyForProfile:self.layoutProfile]];
+    [self setNeedsLayout];
+}
+
+- (void)beginLayoutEditing {
+    if (self.layoutEditing) {
+        return;
+    }
+    [self cancelAllInputs];
+    sLayoutEditorActive = YES;
+    self.layoutEditing = YES;
+    for (UIView *control in self.editableControls) {
+        for (UIGestureRecognizer *gesture in control.gestureRecognizers) {
+            if ([gesture isKindOfClass:UIPanGestureRecognizer.class]) {
+                gesture.enabled = YES;
+            }
+        }
+    }
+    self.editorPanel.hidden = NO;
+    self.menuButton.hidden = YES;
+    [self setNeedsLayout];
+    ChimpPad_Log("touch layout editor opened");
+}
+
+- (void)endLayoutEditing {
+    if (!self.layoutEditing) {
+        return;
+    }
+    [self saveCurrentLayout];
+    self.layoutEditing = NO;
+    sLayoutEditorActive = NO;
+    for (UIView *control in self.editableControls) {
+        for (UIGestureRecognizer *gesture in control.gestureRecognizers) {
+            if ([gesture isKindOfClass:UIPanGestureRecognizer.class]) {
+                gesture.enabled = NO;
+            }
+        }
+    }
+    self.editorPanel.hidden = YES;
+    self.menuButton.hidden = !sTouchControlsDesired;
+    [self setNeedsLayout];
+    ChimpPad_Log("touch layout saved");
 }
 
 - (void)cancelAllInputs {
@@ -835,6 +1064,13 @@ static ChimpPadTouchOverlay *sOverlay;
 
 static void ChimpPad_ApplyTouchControlsState(void) {
     if (sOverlay == nil) {
+        return;
+    }
+    if (sLayoutEditorActive) {
+        for (ChimpPadTouchButton *b in sOverlay.buttons) {
+            b.hidden = b == sOverlay.menuButton;
+        }
+        sOverlay.stick.hidden = NO;
         return;
     }
     const BOOL show = sTouchControlsDesired;
@@ -983,6 +1219,34 @@ extern "C" void platform_ios_touch_set_scale(float scale) {
         [sOverlay setNeedsLayout];
         ChimpPad_Log("touch control scale=%.2f", (double)clamped);
     });
+}
+
+extern "C" int platform_ios_touch_get_preset(void) {
+    if (sTouchControlScale < 0.875f) return 1;
+    if (sTouchControlScale < 1.125f) return 2;
+    if (sTouchControlScale < 1.375f) return 3;
+    return 4;
+}
+
+extern "C" void platform_ios_touch_set_preset(int preset) {
+    static const float scales[] = { 0.75f, 1.0f, 1.25f, 1.5f };
+    int index = MAX(1, MIN(4, preset)) - 1;
+    float scale = scales[index];
+    char value[16];
+    std::snprintf(value, sizeof(value), "%.2f", (double)scale);
+    AppConfig::setAndSave("touch_control_scale", value);
+    platform_ios_touch_set_scale(scale);
+}
+
+extern "C" void platform_ios_touch_begin_edit(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        ChimpPad_SetMenuVisible(0);
+        [sOverlay beginLayoutEditing];
+    });
+}
+
+void ChimpPad_BeginTouchLayoutEditing(void) {
+    platform_ios_touch_begin_edit();
 }
 
 float ChimpPad_RecommendedMenuScale(void) {

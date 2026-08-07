@@ -95,6 +95,13 @@ static NSString *prepareDocumentsDirectory(void) {
 int ChimpPad_PrepareIosRomBoot(void) {
     sResolvedRom[0] = '\0';
 
+    /* A UIKit game has no useful windowed mode. Resolve the host window before
+     * AppHost creates SDL so the Metal drawable uses the complete iPhone/iPad
+     * landscape surface. Keep the game's native Hor+ presentation enabled. */
+    setenv("MDKR_WINDOW_MODE", "fullscreen", 1);
+    setenv("MDKR_WIDESCREEN", "1", 1);
+    setenv("MDKR_ASPECT", "auto", 1);
+
     /* Point every writable engine/launcher path at the app's own Documents so
      * settings, video config, and saves work inside the sandbox. SDL_GetPrefPath
      * cannot resolve on iOS (no $HOME), and the engine's packaged-path marker is

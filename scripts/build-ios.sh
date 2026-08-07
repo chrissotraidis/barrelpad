@@ -56,39 +56,9 @@ cmake --build "$BUILD" -j"${CHIMPPAD_JOBS:-$(sysctl -n hw.ncpu)}" --target mdkr6
 APP="$BUILD/ChimpPad.app"
 mkdir -p "$APP"
 cp -f "$BUILD/mdkr64.app/mdkr64" "$APP/ChimpPad"
-# Ensure Info.plist
-if [ ! -f "$APP/Info.plist" ]; then
-  cat > "$APP/Info.plist" <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleDevelopmentRegion</key><string>en</string>
-  <key>CFBundleDisplayName</key><string>ChimpPad</string>
-  <key>CFBundleExecutable</key><string>ChimpPad</string>
-  <key>CFBundleIdentifier</key><string>com.chrissotraidis.chimppad</string>
-  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleName</key><string>ChimpPad</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
-  <key>LSRequiresIPhoneOS</key><true/>
-  <key>MinimumOSVersion</key><string>15.0</string>
-  <key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
-  <key>UIStatusBarHidden</key><true/>
-  <key>UIFileSharingEnabled</key><true/>
-  <key>LSSupportsOpeningDocumentsInPlace</key><true/>
-  <key>UISupportedInterfaceOrientations</key>
-  <array>
-    <string>UIInterfaceOrientationLandscapeLeft</string>
-    <string>UIInterfaceOrientationLandscapeRight</string>
-  </array>
-  <key>UIRequiredDeviceCapabilities</key>
-  <array><string>arm64</string></array>
-</dict>
-</plist>
-PLIST
-fi
+# Apps without modern launch-screen metadata are placed in the legacy 480x320
+# iPhone compatibility canvas. Always package the reviewed native template.
+cp -f "$ROOT/ios/Info.plist" "$APP/Info.plist"
 
 # Xcode's asset compiler turns the checked-in universal AppIcon catalog into
 # the Assets.car used by modern iOS and iPadOS launchers.
