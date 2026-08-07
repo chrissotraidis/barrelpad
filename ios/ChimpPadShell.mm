@@ -678,34 +678,36 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
 
     if (compact) {
         /*
-         * The phone follows the proven SpaghettiPad grip: steering and the
-         * left Z stay on the left, while DKR's driving actions (A/B/Z/R) get
-         * an airy lower-right cluster. Camera C buttons live above that
-         * cluster, not in its gaps, so every target has a distinct thumb zone.
+         * Keep the iPad grammar: L/Z/R above steering; A/B/Z on the outer
+         * action rail; C below and inboard. Phone is a tighter version of that
+         * layout, not a separate button map.
          */
         CGFloat left = safe.left + 10.0 * sTouchControlScale;
         CGFloat right = safe.right + 8.0 * sTouchControlScale;
         CGFloat bottomY = height - safe.bottom;
         CGFloat s = sTouchControlScale * MAX(0.82, MIN(1.0, height / 390.0));
 
-        CGFloat stickSize = 116.0 * s;
-        CGPoint stickCenter = CGPointMake(left + 100.0 * s, bottomY - 86.0 * s);
+        CGFloat stickSize = 112.0 * s;
+        CGPoint stickCenter = CGPointMake(left + 88.0 * s, bottomY - 74.0 * s);
         self.stick.frame = CP_Frame(stickCenter, stickSize, stickSize);
 
-        CGFloat leftButton = 48.0 * s;
+        CGFloat leftButton = 46.0 * s;
         self.buttonZLeft.frame = CP_Frame(
-            CGPointMake(stickCenter.x + 51.0 * s, bottomY - 190.0 * s),
-            leftButton + 4.0 * s, leftButton + 4.0 * s);
+            CGPointMake(stickCenter.x, bottomY - 172.0 * s),
+            leftButton, leftButton);
         self.buttonL.frame = CP_Frame(
-            CGPointMake(stickCenter.x - 28.0 * s,
+            CGPointMake(stickCenter.x - 52.0 * s,
+                        CGRectGetMidY(self.buttonZLeft.frame)),
+            leftButton, leftButton);
+        self.buttonR.frame = CP_Frame(
+            CGPointMake(stickCenter.x + 52.0 * s,
                         CGRectGetMidY(self.buttonZLeft.frame)),
             leftButton, leftButton);
 
-        /* Lower-right driving cluster; R moves here for one-thumb hopping. */
+        /* Right rail mirrors the tablet: face buttons outside, C-pad inboard. */
         CGFloat aSize = 58.0 * s;
         CGFloat bSize = 54.0 * s;
         CGFloat zSize = 50.0 * s;
-        CGFloat rSize = 48.0 * s;
         CGFloat rightEdge = width - right;
         self.buttonA.frame =
             CP_Frame(CGPointMake(rightEdge - 48.0 * s, bottomY - 62.0 * s), aSize, aSize);
@@ -713,23 +715,23 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
             CP_Frame(CGPointMake(rightEdge - 112.0 * s, bottomY - 76.0 * s), bSize, bSize);
         self.buttonZRight.frame =
             CP_Frame(CGPointMake(rightEdge - 46.0 * s, bottomY - 136.0 * s), zSize, zSize);
-        self.buttonR.frame =
-            CP_Frame(CGPointMake(rightEdge - 109.0 * s, bottomY - 142.0 * s), rSize, rSize);
 
-        /* Menu + Start own the upper-right corner. */
+        /* Move the permanent menu inward: it must be reachable without
+         * stretching into the system-edge gesture area. */
         CGFloat menuSize = 36.0 * s;
         CGRect menuFrame = CP_MenuFrame(self.bounds, safe, menuSize);
+        menuFrame.origin.x -= 20.0 * s;
+        menuFrame.origin.y += 8.0 * s;
         self.menuButton.frame = menuFrame;
         CGFloat startSize = 44.0 * s;
         self.buttonStart.frame = CP_Frame(
             CGPointMake(CGRectGetMidX(menuFrame), CGRectGetMaxY(menuFrame) + 6.0 + startSize * 0.5),
             startSize, startSize);
 
-        /* Camera pad gets its own upper-right band, clear of Z/R and face. */
-        CGFloat cSize = 40.0 * s;
-        CGFloat cRadius = 34.0 * s;
-        CGFloat cX = rightEdge - 58.0 * s;
-        CGFloat cY = safe.top + 154.0 * s;
+        CGFloat cSize = 38.0 * s;
+        CGFloat cRadius = 32.0 * s;
+        CGFloat cX = rightEdge - 210.0 * s;
+        CGFloat cY = bottomY - 76.0 * s;
         self.cUp.frame = CP_Frame(CGPointMake(cX, cY - cRadius), cSize, cSize);
         self.cDown.frame = CP_Frame(CGPointMake(cX, cY + cRadius), cSize, cSize);
         self.cLeft.frame = CP_Frame(CGPointMake(cX - cRadius, cY), cSize, cSize);

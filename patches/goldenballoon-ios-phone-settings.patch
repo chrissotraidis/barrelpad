@@ -1,28 +1,40 @@
-diff --git a/platform/app/ui_common.cpp b/platform/app/ui_common.cpp
 --- a/platform/app/ui_common.cpp
 +++ b/platform/app/ui_common.cpp
-@@ -107,7 +107,7 @@
+@@ -106,8 +106,7 @@
+     }
      const ImGuiID windowOwner = ImGui::GetID("##touch-scroll-owner");
      if (io.MouseClicked[ImGuiMouseButton_Left] &&
-         ImGui::GetScrollMaxY() > 0.0f && ImGui::IsWindowHovered() &&
+-        ImGui::GetScrollMaxY() > 0.0f && ImGui::IsWindowHovered() &&
 -        !ImGui::IsAnyItemHovered()) {
-+        !ImGui::IsAnyItemActive()) {
++        ImGui::GetScrollMaxY() > 0.0f && ImGui::IsWindowHovered()) {
          // Leave the scrollbar's own enlarged interaction strip untouched.
          const ImVec2 windowPos = ImGui::GetWindowPos();
          const ImVec2 windowSize = ImGui::GetWindowSize();
-diff --git a/platform/app/ui_common.h b/platform/app/ui_common.h
+@@ -124,8 +123,9 @@
+     }
+     const float threshold = 8.0f * AppTheme::uiScale();
+     if (!ImGui::IsMouseDragging(ImGuiMouseButton_Left, threshold)) return;
+-    // The gesture is claimed only when it begins away from a widget. Wait until
+-    // intent is predominantly vertical, then keep content glued to the finger.
++    // A dense settings panel has no reliable blank strip to start from. Claim
++    // a deliberate vertical drag even when it begins over a row, then keep the
++    // content glued to the finger. Taps still reach their control unchanged.
+     // No post-release animation means the gesture is immediately interruptible
+     // and respects the launcher's reduced-motion contract.
+     if (std::fabs(io.MouseDelta.y) < std::fabs(io.MouseDelta.x) * 0.75f) return;
 --- a/platform/app/ui_common.h
 +++ b/platform/app/ui_common.h
-@@ -37,7 +37,7 @@
+@@ -37,8 +37,8 @@
  void TextSubtleUnformattedWrapped(const char *text);
  void BrandWordmark();
  void BrandRule();
 -// Direct 1:1 scrolling for a touch drag that begins on non-interactive content.
-+// Direct 1:1 scrolling for a touch drag that begins outside an active widget.
- // Call inside the scroll-owning child before EndChild().
+-// Call inside the scroll-owning child before EndChild().
++// Direct 1:1 scrolling for a deliberate vertical touch drag. Call inside the
++// scroll-owning child before EndChild().
  void TouchScrollCurrentWindow();
  void SectionHeader(const char *title, const char *subtitle);
-diff --git a/platform/app/ui_overlay.cpp b/platform/app/ui_overlay.cpp
+ void RestartBadge();                                 // non-interactive muted chip
 --- a/platform/app/ui_overlay.cpp
 +++ b/platform/app/ui_overlay.cpp
 @@ -45,6 +45,7 @@
@@ -33,7 +45,19 @@ diff --git a/platform/app/ui_overlay.cpp b/platform/app/ui_overlay.cpp
  #include <cstdio>
  #include <cstdlib>
  #include <cstring>
-@@ -484,9 +485,10 @@
+@@ -481,12 +482,22 @@
+     float width = (g_overlay.showSettings ? 720.0f : 560.0f) * uiScale;
+     float height = (confirming ? 250.0f : (g_overlay.showSettings ? 560.0f : 300.0f))
+                    * uiScale;
++#if defined(__APPLE__) && TARGET_OS_IOS
++    const bool phoneSettings = g_overlay.showSettings && viewport.Size.y < 560.0f;
++    if (phoneSettings) {
++        // The settings task needs the whole short landscape phone canvas, not
++        // a desktop-sized window clipped to it.
++        width = viewport.Size.x - 16.0f;
++        height = viewport.Size.y - 16.0f;
++    }
++#endif
      if (width > viewport.Size.x) width = viewport.Size.x;
      if (height > viewport.Size.y) height = viewport.Size.y;
  #if defined(__APPLE__) && TARGET_OS_IOS
@@ -47,7 +71,24 @@ diff --git a/platform/app/ui_overlay.cpp b/platform/app/ui_overlay.cpp
  #else
      const float overlayCenterY = 0.5f;
  #endif
-@@ -584,19 +586,30 @@
+@@ -498,6 +509,16 @@
+ }
+
+ void drawOverlayHeader() {
++#if defined(__APPLE__) && TARGET_OS_IOS
++    const ImGuiViewport *viewport = ImGui::GetMainViewport();
++    if (g_overlay.showSettings && viewport && viewport->Size.y < 560.0f) {
++        ImGui::PushFont(AppTheme::fonts().title);
++        ImGui::TextUnformatted("Settings");
++        ImGui::PopFont();
++        ui::Gap(ui::kGapXS);
++        return;
++    }
++#endif
+     ImGui::PushFont(AppTheme::fonts().title);
+     ImGui::PushStyleColor(ImGuiCol_Text, AppTheme::accent());
+     ImGui::TextUnformatted(MDKR_BRAND_NAME);
+@@ -584,19 +605,39 @@
 
      if (g_overlay.showSettings) {
          ui::Gap(ui::kGapS);
@@ -56,10 +97,19 @@ diff --git a/platform/app/ui_overlay.cpp b/platform/app/ui_overlay.cpp
 +        const float restartReserve = restartPending
 +            ? ui::kGapS + ui::kBtnWide().y
 +            : 0.0f;
-+        const float available = ImGui::GetContentRegionAvail().y - restartReserve;
-+        const float settingsHeight = std::max(
-+            120.0f * uiScale,
-+            std::min(340.0f * uiScale, available));
++        const float available = std::max(
++            1.0f, ImGui::GetContentRegionAvail().y - restartReserve);
++#if defined(__APPLE__) && TARGET_OS_IOS
++        const bool phoneSettings = ImGui::GetMainViewport()->Size.y < 560.0f;
++        // On a phone, consume every remaining point. A lower bound larger than
++        // the available height is exactly what caused the previous sheet to
++        // clip its first and last rows.
++        const float settingsHeight = phoneSettings
++            ? available
++            : std::min(340.0f * uiScale, available);
++#else
++        const float settingsHeight = std::min(340.0f * uiScale, available);
++#endif
 +        ImGui::BeginChild("##ovsettings", ImVec2(0, settingsHeight), true);
          // Compact: the per-key help paragraphs belong in the launcher, not
          // over a running race. Each edit is already atomic in the config
@@ -80,7 +130,6 @@ diff --git a/platform/app/ui_overlay.cpp b/platform/app/ui_overlay.cpp
      }
 
      ui::Gap(ui::kGapM);
-diff --git a/platform/app/ui_settings.cpp b/platform/app/ui_settings.cpp
 --- a/platform/app/ui_settings.cpp
 +++ b/platform/app/ui_settings.cpp
 @@ -953,12 +953,16 @@
