@@ -16,6 +16,24 @@ if [ -f "$FULL" ]; then
     echo "[ChimpPad] full patch already applied or not clean; syncing touch sources only"
   fi
 fi
+DEVICE_UI="$ROOT/patches/goldenballoon-ios-device-ui.patch"
+if [ -f "$DEVICE_UI" ]; then
+  if (cd "$SRC" && patch -p1 --forward --dry-run < "$DEVICE_UI" >/dev/null 2>&1); then
+    (cd "$SRC" && patch -p1 --forward < "$DEVICE_UI")
+    echo "[ChimpPad] applied goldenballoon-ios-device-ui.patch"
+  else
+    echo "[ChimpPad] device-ui patch already applied or not clean"
+  fi
+fi
+PHONE_SETTINGS="$ROOT/patches/goldenballoon-ios-phone-settings.patch"
+if [ -f "$PHONE_SETTINGS" ]; then
+  if (cd "$SRC" && patch -p1 --forward --dry-run < "$PHONE_SETTINGS" >/dev/null 2>&1); then
+    (cd "$SRC" && patch -p1 --forward < "$PHONE_SETTINGS")
+    echo "[ChimpPad] applied goldenballoon-ios-phone-settings.patch"
+  else
+    echo "[ChimpPad] phone-settings patch already applied or not clean"
+  fi
+fi
 # Direct P1 pad inject (shell → platform_ios_touch_set → input queue).
 python3 "$ROOT/scripts/ensure-ios-touch-inject.py" "$SRC"
 mkdir -p "$SRC/platform/chimppad"

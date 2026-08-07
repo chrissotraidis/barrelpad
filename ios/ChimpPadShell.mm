@@ -11,10 +11,12 @@
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 
 #include <SDL.h>
 #include <SDL_syswm.h>
 
+#include "app/app_config.h"
 #include "ChimpPadTouchControls.h"
 #include "ChimpPadInput.h"
 #include "platform_os.h"
@@ -31,6 +33,9 @@ static std::atomic_bool sMenuVisible(false);
 static std::atomic_bool sTouchStickActive(false);
 static std::atomic_bool sGameplayActive(true);
 static BOOL sTouchControlsDesired = YES;
+/* Persistent player-facing touch overlay scale (0.5x-2.0x). Main-thread only;
+ * written by platform_ios_touch_set_scale and read during layout. */
+static float sTouchControlScale = 1.0f;
 
 void ChimpPad_Log(const char *fmt, ...) {
     char buf[1024];
@@ -673,84 +678,58 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
 
     if (compact) {
         /*
-         * Phone landscape is short (~320–430 pt). SpaghettiPad's absolute
-         * C-pad Y collides with the right Z on that height — visible as Z
-         * sitting inside the C diamond. Lay the right rail out as a single
-         * bottom-up stack (A/B/Z) and park C-pad inboard of the face, with
-         * Start/Menu on the top-right safe corner only.
+         * The phone follows the proven SpaghettiPad grip: steering and the
+         * left Z stay on the left, while DKR's driving actions (A/B/Z/R) get
+         * an airy lower-right cluster. Camera C buttons live above that
+         * cluster, not in its gaps, so every target has a distinct thumb zone.
          */
-        CGFloat left = safe.left + 8.0;
-        CGFloat right = safe.right + 8.0;
-        CGFloat bottom = safe.bottom + 8.0;
-        /* Scale slightly on very short landscape so nothing overlaps. */
-        CGFloat s = MAX(0.82, MIN(1.0, height / 390.0));
+        CGFloat left = safe.left + 10.0 * sTouchControlScale;
+        CGFloat right = safe.right + 8.0 * sTouchControlScale;
+        CGFloat bottomY = height - safe.bottom;
+        CGFloat s = sTouchControlScale * MAX(0.82, MIN(1.0, height / 390.0));
 
-        CGFloat stickSize = 108.0 * s;
-        CGPoint stickCenter =
-            CGPointMake(left + stickSize * 0.58, height - bottom - stickSize * 0.55);
+        CGFloat stickSize = 116.0 * s;
+        CGPoint stickCenter = CGPointMake(left + 100.0 * s, bottomY - 86.0 * s);
         self.stick.frame = CP_Frame(stickCenter, stickSize, stickSize);
 
-        CGFloat shoulder = 46.0 * s;
-        CGFloat shoulderGap = 7.0 * s;
+        CGFloat leftButton = 48.0 * s;
         self.buttonZLeft.frame = CP_Frame(
-            CGPointMake(stickCenter.x,
-                        CGRectGetMinY(self.stick.frame) - shoulderGap - shoulder * 0.5),
-            shoulder, shoulder);
+            CGPointMake(stickCenter.x + 51.0 * s, bottomY - 190.0 * s),
+            leftButton + 4.0 * s, leftButton + 4.0 * s);
         self.buttonL.frame = CP_Frame(
-            CGPointMake(stickCenter.x - shoulder - shoulderGap,
+            CGPointMake(stickCenter.x - 28.0 * s,
                         CGRectGetMidY(self.buttonZLeft.frame)),
-            shoulder, shoulder);
-        self.buttonR.frame = CP_Frame(
-            CGPointMake(stickCenter.x + shoulder + shoulderGap,
-                        CGRectGetMidY(self.buttonZLeft.frame)),
-            shoulder, shoulder);
+            leftButton, leftButton);
 
-        /* Face rail: A outer-bottom, B inboard, Z above A — no C in this column. */
-        CGFloat aSize = 56.0 * s;
-        CGFloat bSize = 50.0 * s;
-        CGFloat zSize = 48.0 * s;
-        CGFloat aX = width - right - aSize * 0.55;
-        CGFloat aY = height - bottom - aSize * 0.55;
-        self.buttonA.frame = CP_Frame(CGPointMake(aX, aY), aSize, aSize);
+        /* Lower-right driving cluster; R moves here for one-thumb hopping. */
+        CGFloat aSize = 58.0 * s;
+        CGFloat bSize = 54.0 * s;
+        CGFloat zSize = 50.0 * s;
+        CGFloat rSize = 48.0 * s;
+        CGFloat rightEdge = width - right;
+        self.buttonA.frame =
+            CP_Frame(CGPointMake(rightEdge - 48.0 * s, bottomY - 62.0 * s), aSize, aSize);
         self.buttonB.frame =
-            CP_Frame(CGPointMake(aX - bSize - 10.0 * s, aY + 4.0 * s), bSize, bSize);
+            CP_Frame(CGPointMake(rightEdge - 112.0 * s, bottomY - 76.0 * s), bSize, bSize);
         self.buttonZRight.frame =
-            CP_Frame(CGPointMake(aX + 2.0 * s, aY - aSize * 0.55 - zSize * 0.55 - 6.0 * s),
-                     zSize, zSize);
+            CP_Frame(CGPointMake(rightEdge - 46.0 * s, bottomY - 136.0 * s), zSize, zSize);
+        self.buttonR.frame =
+            CP_Frame(CGPointMake(rightEdge - 109.0 * s, bottomY - 142.0 * s), rSize, rSize);
 
-        /* Menu + Start: top-right only (do not share the face column mid-band). */
+        /* Menu + Start own the upper-right corner. */
         CGFloat menuSize = 36.0 * s;
         CGRect menuFrame = CP_MenuFrame(self.bounds, safe, menuSize);
         self.menuButton.frame = menuFrame;
-        CGFloat startSize = 40.0 * s;
+        CGFloat startSize = 44.0 * s;
         self.buttonStart.frame = CP_Frame(
-            CGPointMake(CGRectGetMidX(menuFrame),
-                        CGRectGetMaxY(menuFrame) + 4.0 + startSize * 0.5),
+            CGPointMake(CGRectGetMidX(menuFrame), CGRectGetMaxY(menuFrame) + 6.0 + startSize * 0.5),
             startSize, startSize);
 
-        /*
-         * C-pad inboard of the face rail, vertically between Start and Z so it
-         * never shares the Z/A column (the bug in the user screenshot).
-         */
-        CGFloat cSize = 34.0 * s;
-        CGFloat cRadius = 30.0 * s;
-        CGFloat cX = CGRectGetMinX(self.buttonB.frame) - cRadius - cSize * 0.35 - 6.0 * s;
-        CGFloat zTop = CGRectGetMinY(self.buttonZRight.frame);
-        CGFloat startBottom = CGRectGetMaxY(self.buttonStart.frame);
-        CGFloat cY = (startBottom + zTop) * 0.5;
-        /* Keep C clear of Start and Z if the band is tight. */
-        CGFloat cHalf = cRadius + cSize * 0.5;
-        if (cY - cHalf < startBottom + 4.0) {
-            cY = startBottom + 4.0 + cHalf;
-        }
-        if (cY + cHalf > zTop - 4.0) {
-            cY = zTop - 4.0 - cHalf;
-        }
-        /* Fallback: if still no room, park C left of B at face height. */
-        if (cY + cHalf > zTop - 2.0 || cY - cHalf < startBottom + 2.0) {
-            cX = CGRectGetMinX(self.buttonB.frame) - cRadius - cSize * 0.5 - 8.0 * s;
-            cY = CGRectGetMidY(self.buttonB.frame);
-        }
+        /* Camera pad gets its own upper-right band, clear of Z/R and face. */
+        CGFloat cSize = 40.0 * s;
+        CGFloat cRadius = 34.0 * s;
+        CGFloat cX = rightEdge - 58.0 * s;
+        CGFloat cY = safe.top + 154.0 * s;
         self.cUp.frame = CP_Frame(CGPointMake(cX, cY - cRadius), cSize, cSize);
         self.cDown.frame = CP_Frame(CGPointMake(cX, cY + cRadius), cSize, cSize);
         self.cLeft.frame = CP_Frame(CGPointMake(cX - cRadius, cY), cSize, cSize);
@@ -770,7 +749,7 @@ static CGRect CP_MenuFrame(CGRect bounds, UIEdgeInsets safe, CGFloat size) {
     }
 
     /* Tablet / large landscape — SpaghettiPad rail layout. */
-    CGFloat scale = MAX(0.78, MIN(1.12, height / 834.0));
+    CGFloat scale = sTouchControlScale * MAX(0.78, MIN(1.12, height / 834.0));
     CGFloat usableWidth = width - safe.left - safe.right;
     CGFloat railWidth = MIN(250.0 * scale, usableWidth * 0.22);
     CGFloat leftCenter = safe.left + railWidth * 0.5;
@@ -856,9 +835,17 @@ static void ChimpPad_ApplyTouchControlsState(void) {
     if (sOverlay == nil) {
         return;
     }
-    BOOL show = sTouchControlsDesired && !sMenuVisible.load();
-    sOverlay.hidden = !show;
-    if (!show) {
+    const BOOL show = sTouchControlsDesired;
+    const BOOL menuOpen = sMenuVisible.load();
+    /* Race controls hide while the host ImGui menu is open so they never sit
+     * on top of it; the persistent ••• button stays reachable to come back.
+     * Matches SpaghettiPad's "settings menu hides the race controls" design. */
+    for (ChimpPadTouchButton *b in sOverlay.buttons) {
+        b.hidden = !show || menuOpen;
+    }
+    sOverlay.stick.hidden = !show || menuOpen;
+    sOverlay.menuButton.hidden = !show;
+    if (!show || menuOpen) {
         [sOverlay cancelAllInputs];
         ChimpPad_ResetAllInputs();
     }
@@ -868,6 +855,11 @@ static void ChimpPad_InstallOverlay(void) {
     if (sOverlay != nil || sSDLWindow == nil) {
         return;
     }
+    /* Apply the persisted touch-control size before the first layout. */
+    const std::string scaleText = AppConfig::get("touch_control_scale", "1.0");
+    const float parsedScale = (float)std::atof(scaleText.c_str());
+    sTouchControlScale = parsedScale < 0.5f ? 0.5f
+                       : (parsedScale > 2.0f ? 2.0f : parsedScale);
     sOverlay = [[ChimpPadTouchOverlay alloc] initWithFrame:sSDLWindow.bounds];
     sOverlay.autoresizingMask =
         UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -967,6 +959,28 @@ void ChimpPad_SetGameplayActive(int active) {
 void ChimpPad_SetMenuVisible(int visible) {
     sMenuVisible.store(visible != 0);
     ChimpPad_ApplyTouchControlsState();
+}
+
+/* Called by the host overlay (ui_overlay.cpp) whenever the ImGui menu opens or
+ * closes so the race controls never cover it. Weak on the engine side; this
+ * definition is what makes the hook live on iOS. */
+extern "C" void platform_ios_touch_menu_visible(int visible) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        ChimpPad_SetMenuVisible(visible);
+    });
+}
+
+/* Called by the Settings panel's "Touch control size" slider. */
+extern "C" void platform_ios_touch_set_scale(float scale) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        const float clamped = scale < 0.5f ? 0.5f : (scale > 2.0f ? 2.0f : scale);
+        if (clamped == sTouchControlScale) {
+            return;
+        }
+        sTouchControlScale = clamped;
+        [sOverlay setNeedsLayout];
+        ChimpPad_Log("touch control scale=%.2f", (double)clamped);
+    });
 }
 
 float ChimpPad_RecommendedMenuScale(void) {

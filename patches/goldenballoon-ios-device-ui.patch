@@ -1,0 +1,178 @@
+diff --git a/cmake/webgpu_artifact.cmake b/cmake/webgpu_artifact.cmake
+index c764c03..0d61dd7 100644
+--- a/cmake/webgpu_artifact.cmake
++++ b/cmake/webgpu_artifact.cmake
+@@ -34,9 +34,12 @@ function(mdkr_select_wgpu_artifact os cpu abi out_supported out_asset out_sha ou
+             else()
+                 set(_supported FALSE)
+             endif()
++        elseif(_cpu MATCHES "^(arm64|aarch64)$")
++            # ChimpPad: iOS device prebuilt from wgpu-native v29.0.1.1
++            set(_asset "wgpu-ios-aarch64-release.zip")
++            set(_sha "e36c9913b9e5095a530fa9121c50b16a4e3dd020e1eebf601f2f47ce24d56941")
+         else()
+             set(_supported FALSE)
+-            set(_reason "iOS device wgpu not enabled; set MDKR_IOS_SIMULATOR=ON for Simulator")
+         endif()
+     elseif(os STREQUAL "Linux" AND _abi STREQUAL "gnu")
+         if(_cpu MATCHES "^(arm64|aarch64)$")
+diff --git a/platform/app/app_theme.cpp b/platform/app/app_theme.cpp
+index 5d5f286..0b8e25e 100644
+--- a/platform/app/app_theme.cpp
++++ b/platform/app/app_theme.cpp
+@@ -3,11 +3,21 @@
+ #include "app_font.h"
+ #include "app_ui_policy.h"
+
++#if defined(__APPLE__)
++#include <TargetConditionals.h>
++#endif
++
+ namespace AppTheme {
+
+ static AppFonts g_fonts;
+ static float      g_fbScale   = 1.0f;   // framebuffer/logical ratio from setup()
++#if defined(__APPLE__) && TARGET_OS_IOS
++// ChimpPad iPad: default the menu a touch smaller so it leaves more of the
++// race visible; the UI scale slider still ranges up to 2.0x.
++static float      g_uiScale   = 0.9f;
++#else
+ static float      g_uiScale   = 1.0f;   // player UI.Scale multiplier
++#endif
+ static ImGuiStyle g_baseStyle;          // metrics at scale 1.0, captured in setup()
+ static bool       g_baseCaptured = false;
+ static bool       g_scalePending = false;
+diff --git a/platform/app/ui_overlay.cpp b/platform/app/ui_overlay.cpp
+index 45eb0f2..8d0c70b 100644
+--- a/platform/app/ui_overlay.cpp
++++ b/platform/app/ui_overlay.cpp
+@@ -32,6 +32,10 @@
+ #include "platform_os.h"    // mdkr_render_backend
+ #include "present_sched.h"  // authoritative test-schedule tick
+
++#if defined(__APPLE__)
++#include <TargetConditionals.h>
++#endif
++
+ #ifdef MDKR_WEBGPU_BACKEND
+ #include "gfx_webgpu_imgui.h"
+ // The surface overlay pass opened by gfx_webgpu.c for exactly this purpose.
+@@ -87,6 +91,11 @@ struct OverlayState {
+
+ OverlayState g_overlay;
+
++/* iOS-only weak hook: the UIKit touch shell hides the race controls while this
++ * overlay is open. The address is NULL on non-iOS builds, so the call site is
++ * a plain null check that costs nothing on desktop. */
++extern "C" __attribute__((weak)) void platform_ios_touch_menu_visible(int visible);
++
+ // --- Bindings (app prefs, defaults matching mgb64) --------------------------
+ int prefInt(const char *key, int fallback) {
+     std::string v = AppConfig::get(key, "");
+@@ -118,6 +127,9 @@ void setOpen(bool open) {
+         g_overlay.showSettings = false;
+         SDL_SetRelativeMouseMode(g_overlay.previousRelativeMouse ? SDL_TRUE : SDL_FALSE);
+     }
++    if (platform_ios_touch_menu_visible) {
++        platform_ios_touch_menu_visible(g_overlay.open ? 1 : 0);
++    }
+ }
+
+ void quitToDesktop() {
+@@ -471,9 +483,16 @@ void positionOverlayWindow(const ImGuiViewport &viewport, float uiScale) {
+                    * uiScale;
+     if (width > viewport.Size.x) width = viewport.Size.x;
+     if (height > viewport.Size.y) height = viewport.Size.y;
++#if defined(__APPLE__) && TARGET_OS_IOS
++    /* iPad: sit the panel a little higher so it never reaches the bottom-left
++     * analog-stick zone; the touch controls hide while it is open anyway. */
++    const float overlayCenterY = 0.42f;
++#else
++    const float overlayCenterY = 0.5f;
++#endif
+     ImGui::SetNextWindowPos(
+         ImVec2(viewport.Pos.x + viewport.Size.x * 0.5f,
+-               viewport.Pos.y + viewport.Size.y * 0.5f),
++               viewport.Pos.y + viewport.Size.y * overlayCenterY),
+         ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+     ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_Always);
+ }
+diff --git a/platform/app/ui_settings.cpp b/platform/app/ui_settings.cpp
+index 527d34c..edb9916 100644
+--- a/platform/app/ui_settings.cpp
++++ b/platform/app/ui_settings.cpp
+@@ -18,6 +18,15 @@
+ #include <cstring>
+ #include <string>
+
++#if defined(__APPLE__)
++#include <TargetConditionals.h>
++#endif
++
++#if defined(__APPLE__) && TARGET_OS_IOS
++/* ChimpPad: weak hook into the UIKit touch shell; NULL elsewhere. */
++extern "C" __attribute__((weak)) void platform_ios_touch_set_scale(float scale);
++#endif
++
+ namespace {
+
+ // --- Status line -----------------------------------------------------------
+@@ -40,6 +49,11 @@ bool g_uiScaleInitialized = false;
+ bool g_uiScaleDirty = false;
+ float g_uiScaleEdit = 1.0f;
+ std::string g_uiScaleError;
++#if defined(__APPLE__) && TARGET_OS_IOS
++bool g_touchScaleInitialized = false;
++bool g_touchScaleDirty = false;
++float g_touchScaleEdit = 1.0f;
++#endif
+ bool g_frameLimitRectValid = false;
+ ImVec2 g_frameLimitRectMin;
+ ImVec2 g_frameLimitRectMax;
+@@ -923,6 +937,47 @@ bool Settings_draw(SDL_Window *window, bool compact) {
+                 "Scales text and controls together after you release the slider. "
+                 "Supported range: 0.75x to 2.00x. For touch, use 1.25x or larger.");
+         }
++#if defined(__APPLE__) && TARGET_OS_IOS
++        /* ChimpPad: on-screen touch overlay size. The UIKit shell owns the
++         * overlay; this row only persists the value and nudges it live. */
++        if (!g_touchScaleInitialized) {
++            g_touchScaleEdit = static_cast<float>(
++                std::atof(AppConfig::get("touch_control_scale", "1.0").c_str()));
++            if (g_touchScaleEdit < 0.75f) g_touchScaleEdit = 0.75f;
++            if (g_touchScaleEdit > 1.5f) g_touchScaleEdit = 1.5f;
++            g_touchScaleInitialized = true;
++            g_touchScaleDirty = false;
++        }
++        ImGui::TextUnformatted("Touch control size");
++        ImGui::SetNextItemWidth(ui::kControlWidth());
++        const bool touchScalePreviewChanged = ImGui::SliderFloat(
++            "##touch-scale", &g_touchScaleEdit, 0.75f, 1.5f, "%.2fx",
++            ImGuiSliderFlags_AlwaysClamp);
++        if (AppUi_deferredCommit(touchScalePreviewChanged,
++                                 ImGui::IsItemDeactivatedAfterEdit(),
++                                 &g_touchScaleDirty)) {
++            if (platform_ios_touch_set_scale) {
++                platform_ios_touch_set_scale(g_touchScaleEdit);
++            }
++            char value[32];
++            std::snprintf(value, sizeof(value), "%.2f",
++                          static_cast<double>(g_touchScaleEdit));
++            const AppConfig::PersistResult persist =
++                AppConfig::setAndSave("touch_control_scale", value);
++            if (AppConfig::persistResultApplied(persist)) {
++                g_touchScaleDirty = false;
++                setStatus("Touch control size saved.", AppTheme::good());
++                changed = true;
++            } else {
++                setStatus("Touch control size could not be saved.", AppTheme::bad());
++            }
++        }
++        if (!compact) {
++            ui::TextSubtleWrapped(
++                "Scales the on-screen touch buttons and stick after you release "
++                "the slider. Supported range: 0.75x to 1.50x.");
++        }
++#endif
+         ui::Gap(ui::kGapS);
+     }

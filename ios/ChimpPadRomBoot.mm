@@ -43,8 +43,72 @@ static NSString *pickRomInDirectory(NSString *dir) {
     return nil;
 }
 
+/*
+ * CoreDevice treats a single-file copy whose destination is "Documents" as
+ * a replacement for the directory rather than a copy into it. Repair that
+ * malformed state once, keeping the transferred ROM and restoring the normal
+ * Files-visible Documents directory before the engine resolves its paths.
+ */
+static NSString *prepareDocumentsDirectory(void) {
+    NSArray<NSString *> *docs = NSSearchPathForDirectoriesInDomains(
+        NSDocumentDirectory, NSUserDomainMask, YES);
+    if (docs.count == 0) {
+        return nil;
+    }
+
+    NSString *docsPath = docs.firstObject;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    BOOL isDirectory = NO;
+    if (![fm fileExistsAtPath:docsPath isDirectory:&isDirectory] || isDirectory) {
+        return docsPath;
+    }
+
+    NSString *holdingPath = [docsPath stringByAppendingString:@".chimpPad-recovery"];
+    NSError *error = nil;
+    if ([fm fileExistsAtPath:holdingPath] ||
+        ![fm moveItemAtPath:docsPath toPath:holdingPath error:&error]) {
+        fprintf(stderr, "[ChimpPad] could not recover malformed Documents path: %s\n",
+                error.localizedDescription.UTF8String);
+        return nil;
+    }
+    if (![fm createDirectoryAtPath:docsPath
+       withIntermediateDirectories:NO attributes:nil error:&error]) {
+        fprintf(stderr, "[ChimpPad] could not recreate Documents: %s\n",
+                error.localizedDescription.UTF8String);
+        [fm moveItemAtPath:holdingPath toPath:docsPath error:nil];
+        return nil;
+    }
+
+    NSString *romPath = [docsPath stringByAppendingPathComponent:@"diddy-kong-racing.v64"];
+    if ([fm fileExistsAtPath:romPath]) {
+        romPath = [docsPath stringByAppendingPathComponent:@"diddy-kong-racing-recovered.v64"];
+    }
+    if (![fm moveItemAtPath:holdingPath toPath:romPath error:&error]) {
+        fprintf(stderr, "[ChimpPad] Documents recovered but ROM is held at %s: %s\n",
+                holdingPath.UTF8String, error.localizedDescription.UTF8String);
+        return docsPath;
+    }
+    fprintf(stderr, "[ChimpPad] recovered ROM into Documents: %s\n", romPath.UTF8String);
+    return docsPath;
+}
+
 int ChimpPad_PrepareIosRomBoot(void) {
     sResolvedRom[0] = '\0';
+
+    /* Point every writable engine/launcher path at the app's own Documents so
+     * settings, video config, and saves work inside the sandbox. SDL_GetPrefPath
+     * cannot resolve on iOS (no $HOME), and the engine's packaged-path marker is
+     * macOS-only (.app/Contents/MacOS/), so without these the device falls back
+     * to CWD=/, which is not writable ("settings file is not writable"). */
+    NSString *docsPath = prepareDocumentsDirectory();
+    if (docsPath != nil) {
+        setenv("MDKR_APP_PREFS_DIR", docsPath.UTF8String, 1);
+        setenv("MDKR_VIDEO_CONFIG_PATH",
+               [docsPath stringByAppendingPathComponent:@"mdkr64.ini"].UTF8String, 1);
+        setenv("MDKR_SAVE_DIR",
+               [docsPath stringByAppendingPathComponent:@"save"].UTF8String, 1);
+        fprintf(stderr, "[ChimpPad] writable dirs -> %s\n", docsPath.UTF8String);
+    }
 
     const char *existing = getenv("MDKR_ROM");
     if (existing != NULL && existing[0] != '\0') {
@@ -59,17 +123,15 @@ int ChimpPad_PrepareIosRomBoot(void) {
         return 1;
     }
 
-    NSArray<NSString *> *docs = NSSearchPathForDirectoriesInDomains(
-        NSDocumentDirectory, NSUserDomainMask, YES);
-    if (docs.count == 0) {
+    if (docsPath == nil) {
         fprintf(stderr, "[ChimpPad] Documents directory unavailable\n");
         return 0;
     }
-    NSString *picked = pickRomInDirectory(docs.firstObject);
+    NSString *picked = pickRomInDirectory(docsPath);
     if (picked == nil) {
         /* Also check a nested ROMs folder if present. */
         NSString *nested =
-            [docs.firstObject stringByAppendingPathComponent:@"ROMs"];
+            [docsPath stringByAppendingPathComponent:@"ROMs"];
         picked = pickRomInDirectory(nested);
     }
     if (picked == nil) {

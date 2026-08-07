@@ -1,0 +1,105 @@
+diff --git a/platform/app/ui_common.cpp b/platform/app/ui_common.cpp
+--- a/platform/app/ui_common.cpp
++++ b/platform/app/ui_common.cpp
+@@ -107,7 +107,7 @@
+     const ImGuiID windowOwner = ImGui::GetID("##touch-scroll-owner");
+     if (io.MouseClicked[ImGuiMouseButton_Left] &&
+         ImGui::GetScrollMaxY() > 0.0f && ImGui::IsWindowHovered() &&
+-        !ImGui::IsAnyItemHovered()) {
++        !ImGui::IsAnyItemActive()) {
+         // Leave the scrollbar's own enlarged interaction strip untouched.
+         const ImVec2 windowPos = ImGui::GetWindowPos();
+         const ImVec2 windowSize = ImGui::GetWindowSize();
+diff --git a/platform/app/ui_common.h b/platform/app/ui_common.h
+--- a/platform/app/ui_common.h
++++ b/platform/app/ui_common.h
+@@ -37,7 +37,7 @@
+ void TextSubtleUnformattedWrapped(const char *text);
+ void BrandWordmark();
+ void BrandRule();
+-// Direct 1:1 scrolling for a touch drag that begins on non-interactive content.
++// Direct 1:1 scrolling for a touch drag that begins outside an active widget.
+ // Call inside the scroll-owning child before EndChild().
+ void TouchScrollCurrentWindow();
+ void SectionHeader(const char *title, const char *subtitle);
+diff --git a/platform/app/ui_overlay.cpp b/platform/app/ui_overlay.cpp
+--- a/platform/app/ui_overlay.cpp
++++ b/platform/app/ui_overlay.cpp
+@@ -45,6 +45,7 @@
+
+ #include <SDL.h>
+
++#include <algorithm>
+ #include <cstdio>
+ #include <cstdlib>
+ #include <cstring>
+@@ -484,9 +485,10 @@
+     if (width > viewport.Size.x) width = viewport.Size.x;
+     if (height > viewport.Size.y) height = viewport.Size.y;
+ #if defined(__APPLE__) && TARGET_OS_IOS
+-    /* iPad: sit the panel a little higher so it never reaches the bottom-left
+-     * analog-stick zone; the touch controls hide while it is open anyway. */
+-    const float overlayCenterY = 0.42f;
++    /* A phone-height panel must remain entirely on-screen. On larger iPads,
++     * retain the slightly raised composition. */
++    const float overlayCenterY =
++        viewport.Size.y < 560.0f * uiScale ? 0.5f : 0.42f;
+ #else
+     const float overlayCenterY = 0.5f;
+ #endif
+@@ -584,19 +586,30 @@
+
+     if (g_overlay.showSettings) {
+         ui::Gap(ui::kGapS);
+-        ImGui::BeginChild("##ovsettings", ImVec2(0, 340 * uiScale), true);
++        const bool restartPending = Settings_restartPending();
++        const float restartReserve = restartPending
++            ? ui::kGapS + ui::kBtnWide().y
++            : 0.0f;
++        const float available = ImGui::GetContentRegionAvail().y - restartReserve;
++        const float settingsHeight = std::max(
++            120.0f * uiScale,
++            std::min(340.0f * uiScale, available));
++        ImGui::BeginChild("##ovsettings", ImVec2(0, settingsHeight), true);
+         // Compact: the per-key help paragraphs belong in the launcher, not
+         // over a running race. Each edit is already atomic in the config
+         // layer, so there is no Apply/Cancel to stage here.
+         Settings_draw(g_overlay.window, /*compact=*/true);
+         ui::TouchScrollCurrentWindow();
+         ImGui::EndChild();
+-        if (Settings_restartPending()) {
++        if (restartPending) {
+             ui::Gap(ui::kGapS);
+             if (ui::PrimaryButton("Restart & Apply", ui::kBtnWide())) {
+                 g_overlay.confirm = ConfirmAction::RestartGame;
+             }
+         }
++        /* Hide destructive navigation until Settings closes; this leaves the
++         * rest of the phone-height panel to the scrollable settings content. */
++        return;
+     }
+
+     ui::Gap(ui::kGapM);
+diff --git a/platform/app/ui_settings.cpp b/platform/app/ui_settings.cpp
+--- a/platform/app/ui_settings.cpp
++++ b/platform/app/ui_settings.cpp
+@@ -953,12 +953,16 @@
+         const bool touchScalePreviewChanged = ImGui::SliderFloat(
+             "##touch-scale", &g_touchScaleEdit, 0.75f, 1.5f, "%.2fx",
+             ImGuiSliderFlags_AlwaysClamp);
++        /* The race controls are hidden while this menu is open, so previewing
++         * their scale during a drag cannot move the active widget underneath
++         * the finger. Give touch users immediate feedback instead of making
++         * them release and reopen Settings to see the new size. */
++        if (touchScalePreviewChanged && platform_ios_touch_set_scale) {
++            platform_ios_touch_set_scale(g_touchScaleEdit);
++        }
+         if (AppUi_deferredCommit(touchScalePreviewChanged,
+                                  ImGui::IsItemDeactivatedAfterEdit(),
+                                  &g_touchScaleDirty)) {
+-            if (platform_ios_touch_set_scale) {
+-                platform_ios_touch_set_scale(g_touchScaleEdit);
+-            }
+             char value[32];
+             std::snprintf(value, sizeof(value), "%.2f",
+                           static_cast<double>(g_touchScaleEdit));
