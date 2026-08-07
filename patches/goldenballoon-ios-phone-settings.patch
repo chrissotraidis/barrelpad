@@ -45,7 +45,16 @@
  #include <cstdio>
  #include <cstdlib>
  #include <cstring>
-@@ -95,6 +96,9 @@
+@@ -70,6 +71,8 @@
+     OverlayExitRequest exitRequest = OverlayExitRequest::None;
+     bool previousRelativeMouse = false;
+     LastInputDevice lastInputDevice = LastInputDevice::KeyboardMouse;
++    bool phoneAllSettings = false;
++    bool resetPhoneSettingsScroll = false;
+
+     // Scripted render-proof state. Keeping it here (instead of function-local
+     // statics) makes every bit of persistent overlay state explicit.
+@@ -95,6 +98,9 @@
   * overlay is open. The address is NULL on non-iOS builds, so the call site is
   * a plain null check that costs nothing on desktop. */
  extern "C" __attribute__((weak)) void platform_ios_touch_menu_visible(int visible);
@@ -55,7 +64,16 @@
 
  // --- Bindings (app prefs, defaults matching mgb64) --------------------------
  int prefInt(const char *key, int fallback) {
-@@ -481,12 +485,22 @@
+@@ -125,6 +131,8 @@
+             g_overlay.audioPaused = false;
+         }
+         g_overlay.showSettings = false;
++        g_overlay.phoneAllSettings = false;
++        g_overlay.resetPhoneSettingsScroll = false;
+         SDL_SetRelativeMouseMode(g_overlay.previousRelativeMouse ? SDL_TRUE : SDL_FALSE);
+     }
+     if (platform_ios_touch_menu_visible) {
+@@ -481,12 +489,22 @@
      float width = (g_overlay.showSettings ? 720.0f : 560.0f) * uiScale;
      float height = (confirming ? 250.0f : (g_overlay.showSettings ? 560.0f : 300.0f))
                     * uiScale;
@@ -81,7 +99,7 @@
  #else
      const float overlayCenterY = 0.5f;
  #endif
-@@ -498,6 +512,16 @@
+@@ -498,6 +516,16 @@
  }
 
  void drawOverlayHeader() {
@@ -98,14 +116,15 @@
      ImGui::PushFont(AppTheme::fonts().title);
      ImGui::PushStyleColor(ImGuiCol_Text, AppTheme::accent());
      ImGui::TextUnformatted(MDKR_BRAND_NAME);
-@@ -570,11 +594,20 @@
+@@ -570,33 +598,134 @@
  }
 
  void drawOverlayMenu(float uiScale) {
 +#if defined(__APPLE__) && TARGET_OS_IOS
-+    const bool phoneSettings = g_overlay.showSettings &&
-+        ImGui::GetMainViewport()->Size.y < 560.0f;
++    const bool phoneViewport = ImGui::GetMainViewport()->Size.y < 560.0f;
++    const bool phoneSettings = g_overlay.showSettings && phoneViewport;
 +#else
++    const bool phoneViewport = false;
 +    const bool phoneSettings = false;
 +#endif
      const OverlayButtonPair primaryActions =
@@ -120,13 +139,46 @@
                        primaryActions.second)) {
          if (g_overlay.showSettings) {
              Settings_cancelAudioPreview();
-@@ -584,19 +617,77 @@
+         }
+         g_overlay.showSettings = !g_overlay.showSettings;
++        if (g_overlay.showSettings && phoneViewport) {
++            g_overlay.phoneAllSettings = false;
++            g_overlay.resetPhoneSettingsScroll = false;
++        }
+     }
 
      if (g_overlay.showSettings) {
          ui::Gap(ui::kGapS);
 -        ImGui::BeginChild("##ovsettings", ImVec2(0, 340 * uiScale), true);
 +#if defined(__APPLE__) && TARGET_OS_IOS
 +        if (phoneSettings) {
++            const float tabSpacing = ImGui::GetStyle().ItemSpacing.x;
++            const float tabWidth =
++                (ImGui::GetContentRegionAvail().x - tabSpacing) * 0.5f;
++            if (g_overlay.phoneAllSettings
++                    ? ImGui::Button("Touch Controls",
++                                    ImVec2(tabWidth, ui::kBtnSecondary().y))
++                    : ui::PrimaryButton("Touch Controls",
++                                        ImVec2(tabWidth, ui::kBtnSecondary().y))) {
++                g_overlay.phoneAllSettings = false;
++            }
++            ImGui::SameLine();
++            if (g_overlay.phoneAllSettings
++                    ? ui::PrimaryButton("All Settings",
++                                        ImVec2(tabWidth, ui::kBtnSecondary().y))
++                    : ImGui::Button("All Settings",
++                                    ImVec2(tabWidth, ui::kBtnSecondary().y))) {
++                if (!g_overlay.phoneAllSettings) {
++                    g_overlay.phoneAllSettings = true;
++                    g_overlay.resetPhoneSettingsScroll = true;
++                }
++            }
++            ui::Gap(ui::kGapS);
++
++            if (g_overlay.phoneAllSettings) {
++                // The complete settings list owns the rest of the phone screen.
++                // Do not render the touch card above it and starve its child.
++            } else {
 +            ImGui::TextUnformatted("Touch Controls");
 +            ui::TextSubtle("Choose a size, or move each control where your thumbs reach it.");
 +            ui::Gap(ui::kGapXS);
@@ -157,11 +209,8 @@
 +                }
 +                return;
 +            }
-+            ui::Gap(ui::kGapS);
-+            if (!ImGui::CollapsingHeader("Advanced Settings")) {
-+                return;
 +            }
-+            ui::Gap(ui::kGapXS);
++            if (!g_overlay.phoneAllSettings) return;
 +        }
 +#endif
 +        const bool restartPending = Settings_restartPending();
@@ -180,7 +229,12 @@
 +#else
 +        const float settingsHeight = std::min(340.0f * uiScale, available);
 +#endif
-+        ImGui::BeginChild("##ovsettings", ImVec2(0, settingsHeight), true);
++        ImGui::BeginChild(phoneSettings ? "##ovsettings-phone" : "##ovsettings",
++                          ImVec2(0, settingsHeight), true);
++        if (phoneSettings && g_overlay.resetPhoneSettingsScroll) {
++            ImGui::SetScrollY(0.0f);
++            g_overlay.resetPhoneSettingsScroll = false;
++        }
          // Compact: the per-key help paragraphs belong in the launcher, not
          // over a running race. Each edit is already atomic in the config
          // layer, so there is no Apply/Cancel to stage here.
