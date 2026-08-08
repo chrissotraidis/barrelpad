@@ -1,6 +1,6 @@
 # Handoff / status
 
-**Date:** 2026-08-07
+**Date:** 2026-08-08
 **Remote:** `origin/main`
 
 ## What works
@@ -37,5 +37,9 @@ BARRELPAD_INPUT_SCRIPT=ref/goldenballoon/tests/input_scripts/race_drive_time_tri
 ## Release boundary
 
 - Physical-device builds are locally signed and tested.
+- `KART-01` is an accepted known issue for this release: after some closed-door
+  impacts, the kart may remain oriented sideways until it enters water. Do not
+  change collision or vehicle physics before release without a captured
+  bad-state transition and regression test; see [ISSUES.md](ISSUES.md#kart-01--sideways-orientation-after-a-closed-door-impact).
 - No public IPA has been uploaded yet; package audit and release publication
   remain separate work.
