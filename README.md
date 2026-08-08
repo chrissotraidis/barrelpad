@@ -14,6 +14,12 @@
   <img alt="ROM not included" src="https://img.shields.io/badge/game%20data-not%20included-FF453A">
 </p>
 
+<p align="center">
+  <img alt="BarrelPad player select screen on iPad with touch controls" src="docs/screenshots/player-select-ipad.jpg" width="100%">
+  <br>
+  <sub>BarrelPad running on iPad with the native touch controller active.</sub>
+</p>
+
 BarrelPad packages the open-source
 [Golden Balloon](https://github.com/akratch/goldenballoon) port of
 [Diddy Kong Racing](https://github.com/davidsm64/diddy-kong-racing) as a native
@@ -141,6 +147,17 @@ Hold A for 0.65 seconds during a race, then lift your finger to keep
 accelerating. Tap A again to release it. Z and R remain momentary.
 
 See [Touch controls](docs/TOUCH_CONTROLS.md) for the mapping and input path.
+
+## Screenshots
+
+| Adventure hub | Racing |
+|---|---|
+| ![Diddy driving through the adventure hub with BarrelPad touch controls](docs/screenshots/adventure-hub-ipad.jpg) | ![A race in progress with BarrelPad touch controls](docs/screenshots/race-ipad.jpg) |
+
+<p align="center">
+  <strong>Overworld flight</strong><br>
+  <img alt="Diddy flying through the overworld with BarrelPad touch controls" src="docs/screenshots/overworld-flight-ipad.jpg" width="100%">
+</p>
 
 ## What works
 
