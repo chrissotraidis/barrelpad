@@ -45,6 +45,15 @@ if [ -f "$CONTROLLER_TAKEOVER" ]; then
     echo "[BarrelPad] controller-takeover patch already applied or not clean"
   fi
 fi
+OVERLAY_INPUT_RESUME="$ROOT/patches/goldenballoon-overlay-input-resume.patch"
+if [ -f "$OVERLAY_INPUT_RESUME" ]; then
+  if (cd "$SRC" && patch -p1 --forward --dry-run < "$OVERLAY_INPUT_RESUME" >/dev/null 2>&1); then
+    (cd "$SRC" && patch -p1 --forward < "$OVERLAY_INPUT_RESUME")
+    echo "[BarrelPad] applied goldenballoon-overlay-input-resume.patch"
+  else
+    echo "[BarrelPad] overlay-input-resume patch already applied or not clean"
+  fi
+fi
 mkdir -p "$SRC/platform/barrelpad"
 cp -f "$ROOT/ios/BarrelPadShell.mm" "$ROOT/ios/BarrelPadTouchControls.h" \
   "$ROOT/src/BarrelPadInput.c" "$ROOT/src/BarrelPadInput.h" \
