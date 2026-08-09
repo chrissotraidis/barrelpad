@@ -1,0 +1,113 @@
+diff --git a/platform/app_overlay_hooks.c b/platform/app_overlay_hooks.c
+--- a/platform/app_overlay_hooks.c
++++ b/platform/app_overlay_hooks.c
+@@ -33,6 +33,13 @@ int platformOverlayWantsInput(void) {
+     return 0;
+ }
+ 
++int platformOverlaySyncInputSuppression(int *suppressed) {
++    const int wants_input = platformOverlayWantsInput();
++    if (suppressed == NULL || *suppressed == wants_input) return 0;
++    *suppressed = wants_input;
++    return 1;
++}
++
+ int platformOverlayWantsRender(void) {
+     if (g_haveHooks && g_hooks.wants_render) return g_hooks.wants_render();
+     /* Browser renderer fault tests need to request the otherwise absent output
+diff --git a/platform/app_overlay_hooks.h b/platform/app_overlay_hooks.h
+--- a/platform/app_overlay_hooks.h
++++ b/platform/app_overlay_hooks.h
+@@ -21,6 +21,7 @@ extern "C" {
+ int  platformOverlayProcessEvent(const void *sdl_event);
+ void platformOverlayService(void);
+ int  platformOverlayWantsInput(void);
++int  platformOverlaySyncInputSuppression(int *suppressed);
+ int  platformOverlayWantsRender(void);
+ int  platformOverlayRender(void);
+ 
+diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
+--- a/platform/platform_sdl_min.c
++++ b/platform/platform_sdl_min.c
+@@ -1863,5 +1863,12 @@ void platform_input_pump(void) {
+      * any new frame acquires a drawable. No-op without registered app hooks. */
+     platformOverlayService();
++    /* Resume can close the ImGui overlay during rendering, outside SDL event
++     * dispatch. Reconcile that edge here so touch/gamepad input cannot remain
++     * suppressed until process restart. */
++    if (platformOverlaySyncInputSuppression(&s_gameInputSuppressed)) {
++        input_clear_game_sources();
++        input_capture_live(target_tick);
++    }
+ #endif
+     if (s_sdlReady) {
+         SDL_Event e;
+@@ -1884,12 +1891,11 @@ void platform_input_pump(void) {
+             int overlayActive = platformOverlayWantsInput();
+             int overlayConsumed = platformOverlayProcessEvent(&e);
+             {
+-                const int overlayNow = platformOverlayWantsInput();
+-                if (overlayActive != overlayNow) {
++                if (platformOverlaySyncInputSuppression(
++                        &s_gameInputSuppressed)) {
+                     /* Both toggle edges are swallowed. Opening capture
+                      * publishes one neutral game sample; closing remains
+                      * neutral until a fresh post-overlay host edge arrives. */
+-                    s_gameInputSuppressed = overlayNow;
+                     input_clear_game_sources();
+                     input_capture_live(target_tick);
+                 }
+diff --git a/tests/test_app_overlay_hooks.c b/tests/test_app_overlay_hooks.c
+--- a/tests/test_app_overlay_hooks.c
++++ b/tests/test_app_overlay_hooks.c
+@@ -6,6 +6,7 @@
+ static int failures;
+ static int processed;
+ static int serviced;
++static int wants_input;
+ 
+ static void expect(int condition, const char *message) {
+     if (condition) {
+@@ -23,6 +24,7 @@ static int process_event(const void *event) {
+ 
+ static void service(void) { serviced++; }
+ 
++static int wants_input_state(void) { return wants_input; }
+ static int yes(void) { return 1; }
+ static int no(void) { return 0; }
+ 
+@@ -36,8 +38,9 @@ static void set_overlay_test_environment(int enabled) {
+ }
+ 
+ int main(void) {
+-    AppOverlayHooks hooks = {process_event, service, yes, no, yes};
++    AppOverlayHooks hooks = {process_event, service, wants_input_state, no, yes};
+     const int event = 7;
++    int input_suppressed = 0;
+ 
+     platformSetOverlayHooks(NULL);
+     set_overlay_test_environment(1);
+@@ -48,6 +51,7 @@ int main(void) {
+     expect(platformOverlayRender() == 1,
+            "absent app renderer is a successful no-op");
+ 
++    wants_input = 1;
+     platformSetOverlayHooks(&hooks);
+     expect(platformOverlayProcessEvent(&event) == 1,
+            "registered hook forwards event-consumed result");
+@@ -56,6 +60,15 @@ int main(void) {
+     expect(serviced == 1, "registered hook services safe-boundary work");
+     expect(platformOverlayWantsInput() == 1,
+            "registered app hook owns input capture");
++    expect(platformOverlaySyncInputSuppression(&input_suppressed) == 1 &&
++               input_suppressed == 1,
++           "opening overlay synchronizes game input suppression");
++    wants_input = 0;
++    expect(platformOverlaySyncInputSuppression(&input_suppressed) == 1 &&
++               input_suppressed == 0,
++           "render-driven overlay close releases game input suppression");
++    expect(platformOverlaySyncInputSuppression(&input_suppressed) == 0,
++           "unchanged overlay state does not retrigger input reset");
+     expect(platformOverlayWantsRender() == 0,
+            "registered app hook overrides the diagnostic fallback");
+     expect(platformOverlayRender() == 1,
