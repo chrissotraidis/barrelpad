@@ -37,9 +37,11 @@ grep -Eq '(^|[[:space:]])1($|[[:space:]])' <<<"$device_families" ||
 grep -Eq '(^|[[:space:]])2($|[[:space:]])' <<<"$device_families" ||
   fail "app does not support iPad"
 
-for required in "$APP/Assets.car" "$APP/AppIcon60x60@2x.png" "$APP/AppIcon76x76@2x~ipad.png"; do
+for required in "$APP/Assets.car" "$APP/AppIcon60x60@2x.png" \
+  "$APP/AppIcon76x76@2x~ipad.png" "$APP/PrivacyInfo.xcprivacy"; do
   [[ -f "$required" ]] || fail "required bundle resource is missing: $required"
 done
+plutil -lint "$APP/PrivacyInfo.xcprivacy" >/dev/null || fail "privacy manifest is invalid"
 
 unexpected_runtime="$(otool -L "$BINARY" | awk 'NR > 1 { print $1 }' | grep -Ev '^(/System/Library/|/usr/lib/)' || true)"
 [[ -z "$unexpected_runtime" ]] || fail "unbundled runtime dependency: $unexpected_runtime"

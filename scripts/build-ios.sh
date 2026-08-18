@@ -85,6 +85,7 @@ fi
 # Apps without modern launch-screen metadata are placed in the legacy 480x320
 # iPhone compatibility canvas. Always package the reviewed native template.
 cp -f "$ROOT/ios/Info.plist" "$APP/Info.plist"
+cp -f "$ROOT/ios/PrivacyInfo.xcprivacy" "$APP/PrivacyInfo.xcprivacy"
 
 # Xcode's asset compiler turns the checked-in universal AppIcon catalog into
 # the Assets.car used by modern iOS and iPadOS launchers.

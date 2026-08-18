@@ -81,7 +81,7 @@ scripts/build-ios.sh --device
 
 # Audited, ROM-free, re-signable IPA
 scripts/package-ios.sh build-ios-device/BarrelPad.app \
-  dist/BarrelPad-0.1.0-preview.1-unsigned.ipa
+  dist/BarrelPad-0.1.0-preview.2-unsigned.ipa
 ```
 
 The iOS products are written to `build-ios-sim/BarrelPad.app` and
@@ -127,7 +127,9 @@ BarrelPad uses separate landscape defaults for each device class:
   overlay on or off and remembers the choice.
 - **Controller takeover:** a physical Player 1 controller automatically hides
   gameplay touch controls without changing the saved preference. Disconnecting
-  it restores touch controls when they were enabled.
+  it restores touch controls when they were enabled. SDL2 ownership is
+  reconciled after hot-plug, foreground resume, and a bounded active check, so
+  a stale handle cannot keep Player 1 or held input after sleep/disconnect.
 - **Quick sizing:** the Touch Controls page provides 1x–4x presets.
 - **Individual editing:** choose **Move & Resize Controls**, select any control,
   drag it, and use the size slider to resize that control alone. **Done** saves
@@ -171,10 +173,10 @@ See [Touch controls](docs/TOUCH_CONTROLS.md) for the mapping and input path.
 | Rendering | WebGPU through Metal; native widescreen landscape on iPhone and iPad |
 | Game setup | Files-visible, user-supplied ROM discovery and native game boot |
 | Touch | Full racing controls, persisted visibility, presets, per-control movement and sizing |
-| Controllers | Physical Player 1 takeover hides gameplay touch and restores it on disconnect |
+| Controllers | SDL2 stable slots; stale-handle release; Player 1 reclaim after sleep/disconnect; foreground reconciliation |
 | Settings | Direct touch/all-settings access and vertical scrolling on iPhone and iPad |
 | Saves | EEPROM saves and in-place app updates preserving app-container data |
-| Packaging | Audited ROM-free Preview 1 IPA with embedded rights and third-party notices |
+| Packaging | Audited ROM-free Preview 2 candidate with privacy manifest, rights, and third-party notices |
 
 Detailed target evidence lives in [docs/STATUS.md](docs/STATUS.md) and
 [docs/EVIDENCE.md](docs/EVIDENCE.md).

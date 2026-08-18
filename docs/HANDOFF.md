@@ -41,7 +41,15 @@ BARRELPAD_INPUT_SCRIPT=ref/goldenballoon/tests/input_scripts/race_drive_time_tri
   impacts, the kart may remain oriented sideways until it enters water. Do not
   change collision or vehicle physics before release without a captured
   bad-state transition and regression test; see [ISSUES.md](ISSUES.md#kart-01--sideways-orientation-after-a-closed-door-impact).
-- Preview 1 is published as a ROM-free unsigned IPA at tag
-  `v0.1.0-preview.1`. It must be re-signed before standard device installation;
-  its SHA-256 is
-  `e94bb65710ded282e67e40e3394190d415adf8a3170495039c69cd58fe4a8a24`.
+- Preview 2 is a locally audited ROM-free unsigned release candidate; no
+  `v0.1.0-preview.2` tag or GitHub release exists yet. It must be re-signed
+  before standard device installation; its candidate SHA-256 is
+  `b2f7127113a526ce8c1fa3306f1afb4b6fb784270f3cf14c983c3cb0d8c9c7ed`.
+- SDL2 controller ownership now reconciles stale handles and instance IDs at
+  lifecycle/event boundaries while preserving stable player slots. Automated
+  regression and iPad deployment/data-preservation proof pass, but physical
+  Bluetooth, wired, natural-sleep, mapping, and two-controller acceptance are
+  still open.
+- iOS keeps the recommended fill-screen `Aspect=auto` default but no longer
+  fixes it through the environment. The standard aspect selector is available
+  in Settings; physical 4:3 selection/persistence remains a hands-on check.

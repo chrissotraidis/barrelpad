@@ -341,6 +341,47 @@ diff --git a/platform/app/ui_settings.cpp b/platform/app/ui_settings.cpp
 index d387cf3..a51cd89 100644
 --- a/platform/app/ui_settings.cpp
 +++ b/platform/app/ui_settings.cpp
+@@ -234,7 +234,7 @@ const char *sourceName(MdkrVideoSource s) {
+ // The schema constrains these values in mdkr_video_config_set(); the tables
+ // here mirror exactly what those validators accept, so the UI can only ever
+ // offer a value the config layer will take. Implemented settings with an
+-// open-ended domain (Aspect and GameplayFOV) get a text field instead.
++// open-ended domain (GameplayFOV) get a text field instead.
+ struct Option { const char *value; const char *label; };
+ struct Options { const Option *items; int count; };
+ 
+@@ -269,6 +269,13 @@ const Option kMotionSmoothing[] = {
+     {"interpolate", "Interpolated (preview)"},
+     {"off",         "Off (original motion)"},
+ };
++const Option kAspect[] = {
++    {"auto",  "Auto (Fill Screen)"},
++    {"4:3",   "4:3 (Original)"},
++    {"16:10", "16:10"},
++    {"16:9",  "16:9"},
++    {"21:9",  "21:9"},
++};
+ const Option kMode[] = {
+     {"pure",       "Pure (reference presentation)"},
+     {"restored",   "Restored (recommended)"},
+@@ -321,6 +328,7 @@ bool optionsFor(MdkrVideoKey k, Options &out) {
+         case MDKR_VIDEO_FRAME_LIMIT:        out = {kFrameLimit, 10}; return true;
+         case MDKR_VIDEO_MOTION_SMOOTHING:
+             out = {kMotionSmoothing, 2}; return true;
++        case MDKR_VIDEO_ASPECT:             out = {kAspect, 5}; return true;
+         case MDKR_VIDEO_MODE:               out = {kMode, 3}; return true;
+         case MDKR_VIDEO_WORLD_SHADOWS:      out = {kShadows, 3}; return true;
+         case MDKR_WINDOW_MODE:              out = {kWindowMode, 2}; return true;
+@@ -357,5 +365,9 @@ const char *helpFor(MdkrVideoKey key, const MdkrVideoSchema *schema) {
+                    "audio, timers, and saves still advance only on Original "
+                    "gameplay ticks. Off shows authored images only.";
++        case MDKR_VIDEO_ASPECT:
++            return "Auto fills the available display and is recommended on "
++                   "iPhone and iPad. Choose 4:3 for the original framing with "
++                   "side bars, or select another fixed ratio.";
+         case MDKR_VIDEO_MODE:
+             // The section introduction directly above this control explains the
+             // three modes; repeating the schema paragraph creates a text wall.
 @@ -953,12 +953,16 @@ bool Settings_draw(SDL_Window *window, bool compact) {
          const bool touchScalePreviewChanged = ImGui::SliderFloat(
              "##touch-scale", &g_touchScaleEdit, 0.75f, 1.5f, "%.2fx",
