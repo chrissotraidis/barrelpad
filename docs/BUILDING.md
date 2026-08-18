@@ -41,6 +41,18 @@ Apple development identity and a provisioning profile whose application
 identifier matches the app's bundle identifier before installing it. Signing
 material is local and must never be committed.
 
+To create the same ROM-free, re-signable IPA shape used for releases:
+
+```sh
+scripts/package-ios.sh build-ios-device/BarrelPad.app \
+  dist/BarrelPad-0.1.0-preview.1-unsigned.ipa
+```
+
+The packager removes local signing, rejects ROMs, saves, profiles, private
+keys, non-system runtime dependencies, and build-directory rpaths, embeds the
+project and upstream notices, rejects personal build paths, verifies ZIP
+integrity, and writes a SHA-256 file beside the IPA.
+
 See [STATUS.md](STATUS.md) for which targets currently launch playably.
 
 ## What the scripts do

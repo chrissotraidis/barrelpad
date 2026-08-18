@@ -68,6 +68,20 @@ APP="$BUILD/BarrelPad.app"
 cmake -E remove_directory "$APP"
 cmake -E make_directory "$APP"
 cp -f "$BUILD/mdkr64.app/mdkr64" "$APP/BarrelPad"
+
+# SDL2 is linked statically, so its local build-directory rpath is unnecessary
+# and must not leak into a redistributable app product.
+while IFS= read -r rpath; do
+  [ -n "$rpath" ] || continue
+  install_name_tool -delete_rpath "$rpath" "$APP/BarrelPad"
+done < <(otool -l "$APP/BarrelPad" | awk '
+  /cmd LC_RPATH/ { getline; getline; sub(/^ *path /, ""); sub(/ \(offset.*$/, ""); print }
+')
+if otool -l "$APP/BarrelPad" | grep -q 'cmd LC_RPATH'; then
+  echo "[BarrelPad] refusing app executable with a remaining LC_RPATH" >&2
+  exit 1
+fi
+
 # Apps without modern launch-screen metadata are placed in the legacy 480x320
 # iPhone compatibility canvas. Always package the reviewed native template.
 cp -f "$ROOT/ios/Info.plist" "$APP/Info.plist"

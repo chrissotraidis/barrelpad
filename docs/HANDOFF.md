@@ -1,6 +1,6 @@
 # Handoff / status
 
-**Date:** 2026-08-08
+**Date:** 2026-08-18
 **Remote:** `origin/main`
 
 ## What works
@@ -41,5 +41,7 @@ BARRELPAD_INPUT_SCRIPT=ref/goldenballoon/tests/input_scripts/race_drive_time_tri
   impacts, the kart may remain oriented sideways until it enters water. Do not
   change collision or vehicle physics before release without a captured
   bad-state transition and regression test; see [ISSUES.md](ISSUES.md#kart-01--sideways-orientation-after-a-closed-door-impact).
-- No public IPA has been uploaded yet; package audit and release publication
-  remain separate work.
+- Preview 1 is published as a ROM-free unsigned IPA at tag
+  `v0.1.0-preview.1`. It must be re-signed before standard device installation;
+  its SHA-256 is
+  `e94bb65710ded282e67e40e3394190d415adf8a3170495039c69cd58fe4a8a24`.

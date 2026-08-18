@@ -46,3 +46,8 @@ BarrelPad **play** does not require decomp extract/build.
 Build and package scripts must refuse to embed ROM bytes. Prefer an audit step
 (scan for known SHA-1 / large baserom-sized blobs) before any distribution
 artifact is produced.
+
+`scripts/package-ios.sh` applies this boundary to the public IPA: it checks
+file names, N64 ROM header magic, the supported ROM SHA-1, saves, signing
+material, runtime linkage, and the final ZIP contents before producing the
+artifact and checksum.
