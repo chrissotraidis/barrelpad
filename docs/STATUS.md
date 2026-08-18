@@ -12,12 +12,12 @@ Last updated: 2026-08-18
 
 Playable = DKR game (not host launcher) reaches race/track gameplay with control response.
 
-## Preview 2 release
+## Preview 2 release candidate
 
-- Version `0.1.0` (build `2`), tag `v0.1.0-preview.2`.
-- Public artifact: unsigned, re-signable arm64 IPA for iPhone and iPad running
-  iOS/iPadOS 15 or later.
-- IPA SHA-256: `b2f7127113a526ce8c1fa3306f1afb4b6fb784270f3cf14c983c3cb0d8c9c7ed`.
+- Version `0.1.0` (build `2`), planned tag `v0.1.0-preview.2`.
+- Local candidate: unsigned, re-signable arm64 IPA for iPhone and iPad running
+  iOS/iPadOS 15 or later. No Preview 2 tag or GitHub release exists yet.
+- Candidate IPA SHA-256: `b2f7127113a526ce8c1fa3306f1afb4b6fb784270f3cf14c983c3cb0d8c9c7ed`.
 - Package audit rejects ROMs, saves, signing material, non-system runtime
   dependencies, code signatures, local build rpaths, and personal build paths.
 - The IPA includes an accurate `NSUserDefaults` privacy declaration, rights,

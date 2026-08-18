@@ -39,7 +39,7 @@ ROM, extracted Nintendo/Rare assets, or a playable game archive. See the
 | Local macOS build | **Available now** | Build with `scripts/build-macos.sh`, then launch with your supported ROM. |
 | iPhone / iPad Simulator | **Available now** | Build with `scripts/build-ios.sh --simulator`, then run `scripts/run-ios-sim.sh phone` or `pad`. |
 | Physical iPhone / iPad | **Tested locally** | Build an unsigned device app with `scripts/build-ios.sh --device`, then sign it with your Apple development identity and provisioning profile. |
-| Public `.ipa` | **Preview 2 available** | Download the [ROM-free unsigned IPA](https://github.com/chrissotraidis/barrelpad/releases/download/v0.1.0-preview.2/BarrelPad-0.1.0-preview.2-unsigned.ipa), then re-sign it for your device. |
+| Public `.ipa` | **Preview 1 available** | Download the [ROM-free unsigned IPA](https://github.com/chrissotraidis/barrelpad/releases/download/v0.1.0-preview.1/BarrelPad-0.1.0-preview.1-unsigned.ipa), then re-sign it for your device. |
 | App Store / TestFlight | **Not announced** | No App Store listing or public TestFlight exists. |
 
 The current development build has been signed, installed, launched, and played
@@ -176,7 +176,7 @@ See [Touch controls](docs/TOUCH_CONTROLS.md) for the mapping and input path.
 | Controllers | SDL2 stable slots; stale-handle release; Player 1 reclaim after sleep/disconnect; foreground reconciliation |
 | Settings | Direct touch/all-settings access and vertical scrolling on iPhone and iPad |
 | Saves | EEPROM saves and in-place app updates preserving app-container data |
-| Packaging | Audited ROM-free Preview 2 IPA with privacy manifest, rights, and third-party notices |
+| Packaging | Audited ROM-free Preview 2 candidate with privacy manifest, rights, and third-party notices |
 
 Detailed target evidence lives in [docs/STATUS.md](docs/STATUS.md) and
 [docs/EVIDENCE.md](docs/EVIDENCE.md).
@@ -220,12 +220,12 @@ scripts/test-unit.sh
 <details>
 <summary><strong>Where is the IPA?</strong></summary>
 
-[Preview 2](https://github.com/chrissotraidis/barrelpad/releases/tag/v0.1.0-preview.2)
+[Preview 1](https://github.com/chrissotraidis/barrelpad/releases/tag/v0.1.0-preview.1)
 provides an unsigned, ROM-free IPA for iPhone and iPad. It contains no game
 data and must be re-signed with your own Apple development credentials before
 standard device installation. Verify it with the
-[published checksum](https://github.com/chrissotraidis/barrelpad/releases/download/v0.1.0-preview.2/BarrelPad-0.1.0-preview.2-unsigned.ipa.sha256):
-`b2f7127113a526ce8c1fa3306f1afb4b6fb784270f3cf14c983c3cb0d8c9c7ed`.
+[published checksum](https://github.com/chrissotraidis/barrelpad/releases/download/v0.1.0-preview.1/BarrelPad-0.1.0-preview.1-unsigned.ipa.sha256):
+`e94bb65710ded282e67e40e3394190d415adf8a3170495039c69cd58fe4a8a24`.
 </details>
 
 <details>

@@ -1,6 +1,6 @@
 # Test evidence ledger
 
-## 2026-08-18 — SDL2 controller sleep/reconnect repair and Preview 2
+## 2026-08-18 — SDL2 controller sleep/reconnect repair and Preview 2 candidate
 
 - Backend: Golden Balloon's SDL2 `SDL_GameController` layer owns four stored
   handles as Player 1–4. The pre-fix code opened on startup/add and closed only
