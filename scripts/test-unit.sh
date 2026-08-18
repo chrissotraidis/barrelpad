@@ -9,4 +9,17 @@ clang -std=c11 -O2 -Wall -Wextra -Isrc \
   "$ROOT/tests/test_barrelpad_input.c" \
   -lm
 "$OUT/test_barrelpad_input"
+
+BOOT_POLICY="$ROOT/ios/BarrelPadRomBoot.mm"
+FULL_PATCH="$ROOT/patches/goldenballoon-ios-full.patch"
+SETTINGS_PATCH="$ROOT/patches/goldenballoon-ios-phone-settings.patch"
+if grep -Eq 'setenv\("MDKR_ASPECT"' "$BOOT_POLICY" "$FULL_PATCH"; then
+  echo "[BarrelPad] iOS aspect ratio must remain a player preference" >&2
+  exit 1
+fi
+grep -Fq 'setenv("MDKR_WINDOW_MODE", "fullscreen", 1);' "$BOOT_POLICY"
+grep -Fq 'setenv("MDKR_WIDESCREEN", "1", 1);' "$BOOT_POLICY"
+grep -Fq '{"auto",  "Auto (Fill Screen)"}' "$SETTINGS_PATCH"
+grep -Fq '{"4:3",   "4:3 (Original)"}' "$SETTINGS_PATCH"
+echo "[BarrelPad] iOS presentation policy tests OK"
 echo "[BarrelPad] unit tests OK"
