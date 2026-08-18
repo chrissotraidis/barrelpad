@@ -35,6 +35,8 @@ cmake -S "SDL2-$SDL_VER" -B "$BUILD" \
   -DCMAKE_OSX_SYSROOT="$SDK" \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
   -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_C_FLAGS="-ffile-prefix-map=$ROOT=." \
+  -DCMAKE_OBJC_FLAGS="-ffile-prefix-map=$ROOT=." \
   -DSDL_SHARED=OFF \
   -DSDL_STATIC=ON \
   -DSDL_TEST=OFF \

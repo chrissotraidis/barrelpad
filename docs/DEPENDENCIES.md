@@ -79,7 +79,8 @@ the canonical `ref/` file in place for redistribution.
 
 ## License notes
 
-- BarrelPad integration code: project license (see root LICENSE when present).
+- BarrelPad integration code and documentation: see `RIGHTS_AND_LICENSES.md`;
+  no repository-level license relicenses upstream code or game content.
 - Golden Balloon first-party: MIT (see `ref/goldenballoon/LICENSE`, `NOTICE.md`).
 - Decomp: see `ref/diddy-kong-racing/LICENSE.md`.
 - SpaghettiPad: reference only; rights boundary in its `RIGHTS_AND_LICENSES.md`.

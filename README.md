@@ -39,7 +39,7 @@ ROM, extracted Nintendo/Rare assets, or a playable game archive. See the
 | Local macOS build | **Available now** | Build with `scripts/build-macos.sh`, then launch with your supported ROM. |
 | iPhone / iPad Simulator | **Available now** | Build with `scripts/build-ios.sh --simulator`, then run `scripts/run-ios-sim.sh phone` or `pad`. |
 | Physical iPhone / iPad | **Tested locally** | Build an unsigned device app with `scripts/build-ios.sh --device`, then sign it with your Apple development identity and provisioning profile. |
-| Public `.ipa` | **Not published yet** | A downloadable, re-signable IPA will be documented only after its package audit and release upload are complete. |
+| Public `.ipa` | **Preview 1 available** | Download the [ROM-free unsigned IPA](https://github.com/chrissotraidis/barrelpad/releases/download/v0.1.0-preview.1/BarrelPad-0.1.0-preview.1-unsigned.ipa), then re-sign it for your device. |
 | App Store / TestFlight | **Not announced** | No App Store listing or public TestFlight exists. |
 
 The current development build has been signed, installed, launched, and played
@@ -78,6 +78,10 @@ scripts/build-ios.sh --simulator
 
 # Unsigned physical-device app
 scripts/build-ios.sh --device
+
+# Audited, ROM-free, re-signable IPA
+scripts/package-ios.sh build-ios-device/BarrelPad.app \
+  dist/BarrelPad-0.1.0-preview.1-unsigned.ipa
 ```
 
 The iOS products are written to `build-ios-sim/BarrelPad.app` and
@@ -170,7 +174,7 @@ See [Touch controls](docs/TOUCH_CONTROLS.md) for the mapping and input path.
 | Controllers | Physical Player 1 takeover hides gameplay touch and restores it on disconnect |
 | Settings | Direct touch/all-settings access and vertical scrolling on iPhone and iPad |
 | Saves | EEPROM saves and in-place app updates preserving app-container data |
-| Packaging | ROM-free products; public IPA publication is still a separate release step |
+| Packaging | Audited ROM-free Preview 1 IPA with embedded rights and third-party notices |
 
 Detailed target evidence lives in [docs/STATUS.md](docs/STATUS.md) and
 [docs/EVIDENCE.md](docs/EVIDENCE.md).
@@ -214,9 +218,12 @@ scripts/test-unit.sh
 <details>
 <summary><strong>Where is the IPA?</strong></summary>
 
-It has not been published yet. Do not treat a local signed development build
-as a public, reusable IPA. The release link and installation instructions will
-be added only after the actual artifact is audited and uploaded.
+[Preview 1](https://github.com/chrissotraidis/barrelpad/releases/tag/v0.1.0-preview.1)
+provides an unsigned, ROM-free IPA for iPhone and iPad. It contains no game
+data and must be re-signed with your own Apple development credentials before
+standard device installation. Verify it with the
+[published checksum](https://github.com/chrissotraidis/barrelpad/releases/download/v0.1.0-preview.1/BarrelPad-0.1.0-preview.1-unsigned.ipa.sha256):
+`e94bb65710ded282e67e40e3394190d415adf8a3170495039c69cd58fe4a8a24`.
 </details>
 
 <details>
