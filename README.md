@@ -225,7 +225,7 @@ provides an unsigned, ROM-free IPA for iPhone and iPad. It contains no game
 data and must be re-signed with your own Apple development credentials before
 standard device installation. Verify it with the
 [published checksum](https://github.com/chrissotraidis/barrelpad/releases/download/v0.1.0-preview.2/BarrelPad-0.1.0-preview.2-unsigned.ipa.sha256):
-`a486d99a4c13e1643bff6036b11c588960d0b94df4798825e0aa101f4eed179c`.
+`b2f7127113a526ce8c1fa3306f1afb4b6fb784270f3cf14c983c3cb0d8c9c7ed`.
 </details>
 
 <details>

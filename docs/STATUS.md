@@ -17,7 +17,7 @@ Playable = DKR game (not host launcher) reaches race/track gameplay with control
 - Version `0.1.0` (build `2`), tag `v0.1.0-preview.2`.
 - Public artifact: unsigned, re-signable arm64 IPA for iPhone and iPad running
   iOS/iPadOS 15 or later.
-- IPA SHA-256: `a486d99a4c13e1643bff6036b11c588960d0b94df4798825e0aa101f4eed179c`.
+- IPA SHA-256: `b2f7127113a526ce8c1fa3306f1afb4b6fb784270f3cf14c983c3cb0d8c9c7ed`.
 - Package audit rejects ROMs, saves, signing material, non-system runtime
   dependencies, code signatures, local build rpaths, and personal build paths.
 - The IPA includes an accurate `NSUserDefaults` privacy declaration, rights,
@@ -38,6 +38,15 @@ Playable = DKR game (not host launcher) reaches race/track gameplay with control
 - Physical iPad build/install/boot and data preservation pass. No physical
   controller was connected, so Bluetooth, wired, natural-sleep, full mapping,
   and two-controller acceptance remain hands-on gates.
+
+### Aspect ratio settings (2026-08-18)
+
+- The recommended fill-screen `Auto` behavior remains the default on iPhone and
+  iPad, but it is no longer session-locked by `MDKR_ASPECT`.
+- Settings offers Auto (Fill Screen), 4:3 (Original), 16:10, 16:9, and 21:9;
+  the selection uses the existing live, persisted video-configuration path.
+- Automated configuration/UI checks and the iPhoneOS build pass. Physical
+  pillarboxing and relaunch persistence remain a hands-on acceptance check.
 
 ### Touch controls (2026-08-07)
 

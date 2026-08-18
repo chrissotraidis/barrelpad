@@ -14,6 +14,11 @@
 - Deterministic coverage passes for missed removal with held input, neutral
   state after release, sole-controller Player 1 reclaim, an additional Player 2,
   preservation of an unchanged second controller, and foreground reconciliation.
+- iOS still defaults to the recommended fill-screen `Aspect=auto`, now from the
+  normal video configuration rather than an environment lock. Settings exposes
+  Auto (Fill Screen), 4:3 (Original), 16:10, 16:9, and 21:9. Configuration,
+  persistence, launcher UI, clean patch replay, macOS, and iPhoneOS build checks
+  pass; physically selecting and relaunching a framed ratio remains open.
 - The ROM-free iPad Simulator and arm64 iPhoneOS Release products compiled. All
   101 practical host tests passed in the final full run. Repo safety, clean
   patch replay, diff checks, and focused tests pass.
@@ -32,7 +37,7 @@
   hands-on gates.
 - `BarrelPad-0.1.0-preview.2-unsigned.ipa` is a deterministic, unsigned,
   ROM-free arm64 package. Two builds were byte-identical; SHA-256 is
-  `a486d99a4c13e1643bff6036b11c588960d0b94df4798825e0aa101f4eed179c`.
+  `b2f7127113a526ce8c1fa3306f1afb4b6fb784270f3cf14c983c3cb0d8c9c7ed`.
   The audit passed ZIP, platform/minimum OS, version/build, dependency, rights,
   privacy-manifest, signature-removal, and private-content checks.
 

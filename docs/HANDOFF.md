@@ -44,9 +44,12 @@ BARRELPAD_INPUT_SCRIPT=ref/goldenballoon/tests/input_scripts/race_drive_time_tri
 - Preview 2 is published as a ROM-free unsigned IPA at tag
   `v0.1.0-preview.2`. It must be re-signed before standard device installation;
   its SHA-256 is
-  `a486d99a4c13e1643bff6036b11c588960d0b94df4798825e0aa101f4eed179c`.
+  `b2f7127113a526ce8c1fa3306f1afb4b6fb784270f3cf14c983c3cb0d8c9c7ed`.
 - SDL2 controller ownership now reconciles stale handles and instance IDs at
   lifecycle/event boundaries while preserving stable player slots. Automated
   regression and iPad deployment/data-preservation proof pass, but physical
   Bluetooth, wired, natural-sleep, mapping, and two-controller acceptance are
   still open.
+- iOS keeps the recommended fill-screen `Aspect=auto` default but no longer
+  fixes it through the environment. The standard aspect selector is available
+  in Settings; physical 4:3 selection/persistence remains a hands-on check.
