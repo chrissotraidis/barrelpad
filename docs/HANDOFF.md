@@ -41,7 +41,12 @@ BARRELPAD_INPUT_SCRIPT=ref/goldenballoon/tests/input_scripts/race_drive_time_tri
   impacts, the kart may remain oriented sideways until it enters water. Do not
   change collision or vehicle physics before release without a captured
   bad-state transition and regression test; see [ISSUES.md](ISSUES.md#kart-01--sideways-orientation-after-a-closed-door-impact).
-- Preview 1 is published as a ROM-free unsigned IPA at tag
-  `v0.1.0-preview.1`. It must be re-signed before standard device installation;
+- Preview 2 is published as a ROM-free unsigned IPA at tag
+  `v0.1.0-preview.2`. It must be re-signed before standard device installation;
   its SHA-256 is
-  `e94bb65710ded282e67e40e3394190d415adf8a3170495039c69cd58fe4a8a24`.
+  `a486d99a4c13e1643bff6036b11c588960d0b94df4798825e0aa101f4eed179c`.
+- SDL2 controller ownership now reconciles stale handles and instance IDs at
+  lifecycle/event boundaries while preserving stable player slots. Automated
+  regression and iPad deployment/data-preservation proof pass, but physical
+  Bluetooth, wired, natural-sleep, mapping, and two-controller acceptance are
+  still open.

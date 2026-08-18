@@ -71,6 +71,13 @@ SpaghettiPad’s emission model but **without** Mario Kart
 item/hold semantics (no MK64 item-double-Z assumptions; A-hold assist is
 optional and DKR-tuned).
 
+Physical controller ownership remains inside Golden Balloon's SDL2
+`SDL_GameController` layer. Four handles map directly to Player 1–4, with
+instance-ID/current-enumeration reconciliation preserving valid owners and
+retiring stale handles after missed events or foreground resume. BarrelPad's
+UIKit shell receives only the resulting physical-controller presence state for
+touch-overlay visibility.
+
 ## Targets
 
 | Target | Backend preference | Notes |

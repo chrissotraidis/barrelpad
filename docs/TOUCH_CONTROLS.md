@@ -54,6 +54,13 @@ closes the editor, clears any held input, and restores the gameplay touch path.
   is enabled.
 - Touch uses direct P1 injection instead of registering a virtual SDL controller,
   so the shell cannot occupy Player 1 before real hardware connects.
+- Golden Balloon's SDL2 layer remains the controller owner. It reconciles
+  current instance IDs and attachment state at startup, hot-plug/remap,
+  foreground resume, and a bounded active check. Valid owners keep their player
+  slot; a sole returning controller reclaims Player 1; additional controllers
+  use the next free slot; stale held buttons and axes are cleared.
+- Automated stale-handle and slot tests pass. Physical Bluetooth, wired,
+  natural-sleep, mapping, and two-controller behavior are not yet accepted.
 
 ## Default racing mapping
 
@@ -87,7 +94,8 @@ closes the editor, clears any held input, and restores the gameplay touch path.
 ## Diagnostics
 
 - Logs: `touch action=…`, `pad inject buttons=0x…`,
-  `physical controller connected=… touch visible=…`
+  `physical controller connected=… touch visible=…`, and
+  `controller reconcile reason=… action=… slot=… instance=…`
 - Force inject: `MDKR_IOS_FORCE_PAD=start|a|0x1000` (+ optional DELAY/HOLD frames)
 
 ## Implementation

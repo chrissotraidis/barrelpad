@@ -1,0 +1,309 @@
+diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
+--- a/platform/platform_sdl_min.c
++++ b/platform/platform_sdl_min.c
+@@ -30,6 +30,9 @@
+ #include <stdint.h>
+ #include <limits.h>
+ #include <time.h>
++#if defined(BARRELPAD_IOS)
++#include "BarrelPadControllerSlots.h"
++#endif
+ #ifndef __EMSCRIPTEN__
+ #if defined(__APPLE__)
+ #include <TargetConditionals.h>
+@@ -372,6 +375,10 @@
+ 
+ static SDL_GameController *s_gc[DKR_MAXPADS] = { NULL, NULL, NULL, NULL };
+ static Uint8 s_gcIsVirtual[DKR_MAXPADS] = { 0, 0, 0, 0 };
++#if defined(BARRELPAD_IOS)
++static BarrelPadControllerSlots s_gcSlots;
++static unsigned int s_gcActiveCheckCountdown;
++#endif
+ /* DKR's current motor request per port. Kept separate from the user mute/profile
+  * so a live preference change can stop or refresh an already-running effect. */
+ static Uint8 s_rumbleRequested[DKR_MAXPADS] = { 0, 0, 0, 0 };
+@@ -1309,7 +1316,9 @@
+ static void ios_notify_physical_controller_state(void) {
+     int connected = 0;
+     for (int i = 0; i < DKR_MAXPADS; ++i) {
+-        if (s_gc[i] != NULL && !s_gcIsVirtual[i]) {
++        if (s_gc[i] != NULL &&
++            SDL_GameControllerGetAttached(s_gc[i]) == SDL_TRUE &&
++            !s_gcIsVirtual[i]) {
+             connected = 1;
+             break;
+         }
+@@ -1320,6 +1329,7 @@
+ }
+ #endif
+ 
++#if !defined(BARRELPAD_IOS)
+ static void gc_try_open(int deviceIndex) {
+     if (!SDL_IsGameController(deviceIndex)) return;
+     for (int i = 0; i < DKR_MAXPADS; i++) {
+@@ -1371,7 +1381,174 @@
+         }
+     }
+ }
++#endif
+ 
++static int gc_port_connected(int port) {
++    return port >= 0 && port < DKR_MAXPADS && s_gc[port] != NULL &&
++           SDL_GameControllerGetAttached(s_gc[port]) == SDL_TRUE;
++}
++
++#if defined(BARRELPAD_IOS)
++static void gc_reconcile_close_slot(int slot, int32_t instanceId,
++                                    const char *reason) {
++    char name[128];
++    const char *controllerName =
++        s_gc[slot] != NULL ? SDL_GameControllerName(s_gc[slot]) : NULL;
++    snprintf(name, sizeof(name), "%s",
++             controllerName != NULL ? controllerName : "unknown");
++    if (s_gc[slot] != NULL) {
++        (void)platform_pad_rumble(slot, 0);
++        SDL_GameControllerClose(s_gc[slot]);
++    }
++    s_gc[slot] = NULL;
++    s_gcIsVirtual[slot] = 0;
++    s_rumbleSupported[slot] = -1;
++    s_rumbleRequested[slot] = 0;
++    memset(&s_controllerSource[slot], 0, sizeof(s_controllerSource[slot]));
++    fprintf(stderr,
++            "[SDL] controller reconcile reason=%s action=release-close "
++            "slot=P%d instance=%d name=%s\n",
++            reason, slot + 1, (int)instanceId, name);
++}
++
++static int gc_reconcile(const char *reason) {
++    BarrelPadControllerSlotChanges changes;
++    int32_t oldInstanceIds[BARRELPAD_CONTROLLER_SLOT_COUNT];
++    int32_t *currentInstanceIds = NULL;
++    int *currentDeviceIndexes = NULL;
++    int currentCount = 0;
++    int changed = 0;
++    const int joystickCount = SDL_NumJoysticks();
++
++    SDL_GameControllerUpdate();
++    if (joystickCount > 0) {
++        currentInstanceIds = (int32_t *)calloc(
++            (size_t)joystickCount, sizeof(*currentInstanceIds));
++        currentDeviceIndexes = (int *)calloc(
++            (size_t)joystickCount, sizeof(*currentDeviceIndexes));
++        if (currentInstanceIds == NULL || currentDeviceIndexes == NULL) {
++            fprintf(stderr,
++                    "[SDL] controller reconcile reason=%s action=enumerate-failure "
++                    "error=out-of-memory\n",
++                    reason);
++            free(currentInstanceIds);
++            free(currentDeviceIndexes);
++            return 0;
++        }
++    }
++
++    for (int deviceIndex = 0; deviceIndex < joystickCount; ++deviceIndex) {
++        SDL_JoystickID instanceId;
++        if (!SDL_IsGameController(deviceIndex)) {
++            continue;
++        }
++        instanceId = SDL_JoystickGetDeviceInstanceID(deviceIndex);
++        if (instanceId < 0) {
++            fprintf(stderr,
++                    "[SDL] controller reconcile reason=%s action=enumerate-skip "
++                    "device=%d error=%s\n",
++                    reason, deviceIndex, SDL_GetError());
++            continue;
++        }
++        currentInstanceIds[currentCount] = (int32_t)instanceId;
++        currentDeviceIndexes[currentCount] = deviceIndex;
++        ++currentCount;
++    }
++
++    for (int slot = 0; slot < DKR_MAXPADS; ++slot) {
++        SDL_Joystick *joystick;
++        SDL_JoystickID actualInstanceId;
++        if (s_gc[slot] == NULL) {
++            continue;
++        }
++        joystick = SDL_GameControllerGetJoystick(s_gc[slot]);
++        actualInstanceId = joystick != NULL ? SDL_JoystickInstanceID(joystick) : -1;
++        if (SDL_GameControllerGetAttached(s_gc[slot]) != SDL_TRUE ||
++            actualInstanceId < 0 ||
++            s_gcSlots.instanceIds[slot] != (int32_t)actualInstanceId) {
++            const int32_t staleInstanceId = s_gcSlots.instanceIds[slot];
++            gc_reconcile_close_slot(slot, staleInstanceId, reason);
++            s_gcSlots.instanceIds[slot] = BARRELPAD_CONTROLLER_ID_NONE;
++            changed = 1;
++        }
++    }
++
++    memcpy(oldInstanceIds, s_gcSlots.instanceIds, sizeof(oldInstanceIds));
++    changes = BarrelPad_ControllerSlotsReconcile(
++        &s_gcSlots, currentInstanceIds, (size_t)currentCount);
++
++    for (int slot = 0; slot < DKR_MAXPADS; ++slot) {
++        if ((changes.releasedMask & (1u << slot)) != 0) {
++            gc_reconcile_close_slot(slot, oldInstanceIds[slot], reason);
++            changed = 1;
++        }
++    }
++
++    for (int slot = 0; slot < DKR_MAXPADS; ++slot) {
++        SDL_GameController *controller;
++        SDL_Joystick *joystick;
++        SDL_JoystickID actualInstanceId;
++        int deviceIndex = -1;
++        const int32_t desiredInstanceId = s_gcSlots.instanceIds[slot];
++        if ((changes.assignedMask & (1u << slot)) == 0) {
++            continue;
++        }
++        for (int i = 0; i < currentCount; ++i) {
++            if (currentInstanceIds[i] == desiredInstanceId) {
++                deviceIndex = currentDeviceIndexes[i];
++                break;
++            }
++        }
++        controller = deviceIndex >= 0 ? SDL_GameControllerOpen(deviceIndex) : NULL;
++        joystick = controller != NULL ? SDL_GameControllerGetJoystick(controller) : NULL;
++        actualInstanceId = joystick != NULL ? SDL_JoystickInstanceID(joystick) : -1;
++        if (controller == NULL ||
++            SDL_GameControllerGetAttached(controller) != SDL_TRUE ||
++            actualInstanceId != desiredInstanceId) {
++            const char *deviceName = deviceIndex >= 0 ?
++                SDL_GameControllerNameForIndex(deviceIndex) : NULL;
++            fprintf(stderr,
++                    "[SDL] controller reconcile reason=%s action=open-failure "
++                    "slot=P%d device=%d instance=%d name=%s error=%s\n",
++                    reason, slot + 1, deviceIndex, (int)desiredInstanceId,
++                    deviceName != NULL ? deviceName : "unknown",
++                    SDL_GetError());
++            if (controller != NULL) {
++                SDL_GameControllerClose(controller);
++            }
++            s_gcSlots.instanceIds[slot] = BARRELPAD_CONTROLLER_ID_NONE;
++            continue;
++        }
++
++        s_gc[slot] = controller;
++        s_gcIsVirtual[slot] = 0;
++#if SDL_VERSION_ATLEAST(2, 0, 14)
++        s_gcIsVirtual[slot] = SDL_JoystickIsVirtual(deviceIndex) ? 1 : 0;
++#endif
++        s_rumbleSupported[slot] = -1;
++        s_rumbleRequested[slot] = 0;
++        memset(&s_controllerSource[slot], 0, sizeof(s_controllerSource[slot]));
++        fprintf(stderr,
++                "[SDL] controller reconcile reason=%s action=assign-open "
++                "slot=P%d device=%d instance=%d name=%s\n",
++                reason, slot + 1, deviceIndex, (int)desiredInstanceId,
++                SDL_GameControllerName(controller) != NULL ?
++                    SDL_GameControllerName(controller) : "unknown");
++        changed = 1;
++    }
++
++    if (changed || strcmp(reason, "active-check") != 0) {
++        fprintf(stderr,
++                "[SDL] controller reconcile reason=%s current=%d changed=%d\n",
++                reason, currentCount, changed);
++        ios_notify_physical_controller_state();
++    }
++    free(currentInstanceIds);
++    free(currentDeviceIndexes);
++    return changed;
++}
++#endif
++
+ void platform_input_init(void) {
+     MdkrInputSample initial[MDKR_INPUT_PORTS];
+     char packaged_mapping_path[4096];
+@@ -1424,7 +1601,13 @@
+     if (executable_base != NULL) {
+         SDL_free(executable_base);
+     }
++#if defined(BARRELPAD_IOS)
++    BarrelPad_ControllerSlotsInit(&s_gcSlots);
++    s_gcActiveCheckCountdown = 120;
++    (void)gc_reconcile("startup");
++#else
+     for (int i = 0; i < SDL_NumJoysticks(); i++) gc_try_open(i);
++#endif
+     for (int i = 0; i < DKR_MAXPADS; i++) {
+         s_pads[i].buttons = 0;
+         s_pads[i].stick_x = 0;
+@@ -1438,7 +1621,7 @@
+     int port;
+     for (port = 0; port < DKR_MAXPADS; port++) {
+         SDL_Joystick *joystick;
+-        if (s_gc[port] == NULL) {
++        if (!gc_port_connected(port)) {
+             continue;
+         }
+         joystick = SDL_GameControllerGetJoystick(s_gc[port]);
+@@ -1766,12 +1949,12 @@
+     for (port = 0; port < DKR_MAXPADS; port++) {
+         struct pad_state live = { 0, 0, 0, 0 };
+         MdkrInputSample sample;
+-        live.present = port == 0 || s_gc[port] != NULL;
++        live.present = port == 0 || gc_port_connected(port);
+         if (!s_gameInputSuppressed) {
+             if (port == 0) {
+                 kbd_read(&live);
+             }
+-            if (s_gc[port] != NULL) {
++            if (gc_port_connected(port)) {
+                 gc_read(&s_controllerSource[port], &live);
+             }
+ #if defined(__APPLE__)
+@@ -1859,6 +2042,16 @@
+  * ticks; it never directly replaces the DKR-visible s_pads snapshot. */
+ void platform_input_pump(void) {
+     const uint64_t target_tick = present_sched_input_target_tick();
++#if defined(BARRELPAD_IOS)
++    if (s_gcActiveCheckCountdown == 0) {
++        if (gc_reconcile("active-check")) {
++            input_capture_live(target_tick);
++        }
++        s_gcActiveCheckCountdown = 120;
++    } else {
++        --s_gcActiveCheckCountdown;
++    }
++#endif
+ #ifdef MDKR_APP
+     /* Applies deferred shell/window work after the previous present and before
+      * any new frame acquires a drawable. No-op without registered app hooks. */
+@@ -1961,13 +2154,35 @@
+                     }
+                     break;
+                 case SDL_CONTROLLERDEVICEADDED:
++#if defined(BARRELPAD_IOS)
++                    (void)gc_reconcile("device-added");
++#else
+                     gc_try_open(e.cdevice.which);
++#endif
+                     input_changed = 1;
+                     break;
+                 case SDL_CONTROLLERDEVICEREMOVED:
++#if defined(BARRELPAD_IOS)
++                    (void)gc_reconcile("device-removed");
++#else
+                     gc_close_instance(e.cdevice.which);
++#endif
++                    input_changed = 1;
++                    break;
++#if defined(BARRELPAD_IOS)
++                case SDL_CONTROLLERDEVICEREMAPPED:
++                    (void)gc_reconcile("device-remapped");
++                    input_changed = 1;
++                    break;
++                case SDL_APP_WILLENTERBACKGROUND:
++                    input_clear_game_sources();
+                     input_changed = 1;
+                     break;
++                case SDL_APP_DIDENTERFOREGROUND:
++                    (void)gc_reconcile("foreground");
++                    input_changed = 1;
++                    break;
++#endif
+                 case SDL_CONTROLLERBUTTONDOWN:
+                 case SDL_CONTROLLERBUTTONUP: {
+                     const int port = gc_port_for_instance(e.cbutton.which);

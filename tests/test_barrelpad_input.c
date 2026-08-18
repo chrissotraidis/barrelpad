@@ -1,5 +1,6 @@
 /* Unit tests for pure BarrelPad input/layout helpers — drives real shipped code. */
 #include "BarrelPadInput.h"
+#include "BarrelPadControllerSlots.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -61,6 +62,92 @@ static void test_touch_controller_takeover(void) {
            "saved-off touch stays hidden without a controller");
     EXPECT(!BarrelPad_GameplayTouchEnabled(false, true),
            "saved-off touch stays hidden with a controller");
+}
+
+static void release_fake_controller_input(
+    const BarrelPadControllerSlotChanges changes,
+    uint16_t buttons[BARRELPAD_CONTROLLER_SLOT_COUNT],
+    int16_t axes[BARRELPAD_CONTROLLER_SLOT_COUNT]) {
+    for (int slot = 0; slot < BARRELPAD_CONTROLLER_SLOT_COUNT; ++slot) {
+        if ((changes.releasedMask & (1u << slot)) != 0) {
+            buttons[slot] = 0;
+            axes[slot] = 0;
+        }
+    }
+}
+
+static void test_controller_missed_removal_releases_input(void) {
+    BarrelPadControllerSlots slots;
+    uint16_t buttons[BARRELPAD_CONTROLLER_SLOT_COUNT] = {0x8000, 0, 0, 0};
+    int16_t axes[BARRELPAD_CONTROLLER_SLOT_COUNT] = {24000, 0, 0, 0};
+    const int32_t firstController[] = {101};
+
+    BarrelPad_ControllerSlotsInit(&slots);
+    BarrelPadControllerSlotChanges changes = BarrelPad_ControllerSlotsReconcile(
+        &slots, firstController, 1);
+    EXPECT(changes.assignedMask == 0x1, "first controller claims player 1");
+
+    /* SDL never delivered the removal event, but current enumeration is empty. */
+    changes = BarrelPad_ControllerSlotsReconcile(&slots, NULL, 0);
+    release_fake_controller_input(changes, buttons, axes);
+    EXPECT(changes.releasedMask == 0x1, "missed removal releases stale player 1");
+    EXPECT(slots.instanceIds[0] == BARRELPAD_CONTROLLER_ID_NONE,
+           "stale player 1 ownership is vacant");
+    EXPECT(buttons[0] == 0 && axes[0] == 0,
+           "disconnect publishes neutral buttons and axes");
+}
+
+static void test_controller_return_and_additional_slots(void) {
+    BarrelPadControllerSlots slots;
+    const int32_t returning[] = {202};
+    const int32_t twoControllers[] = {202, 303};
+
+    BarrelPad_ControllerSlotsInit(&slots);
+    BarrelPadControllerSlotChanges changes = BarrelPad_ControllerSlotsReconcile(
+        &slots, returning, 1);
+    EXPECT(changes.assignedMask == 0x1 && slots.instanceIds[0] == 202,
+           "sole returning controller reclaims player 1");
+
+    changes = BarrelPad_ControllerSlotsReconcile(&slots, twoControllers, 2);
+    EXPECT(changes.assignedMask == 0x2 && slots.instanceIds[0] == 202 &&
+               slots.instanceIds[1] == 303,
+           "additional controller claims player 2 without moving player 1");
+}
+
+static void test_controller_two_player_preservation(void) {
+    BarrelPadControllerSlots slots;
+    const int32_t original[] = {101, 202};
+    const int32_t secondRemains[] = {202, 303};
+
+    BarrelPad_ControllerSlotsInit(&slots);
+    (void)BarrelPad_ControllerSlotsReconcile(&slots, original, 2);
+    BarrelPadControllerSlotChanges changes = BarrelPad_ControllerSlotsReconcile(
+        &slots, secondRemains, 2);
+
+    EXPECT(changes.releasedMask == 0x1 && changes.assignedMask == 0x1,
+           "only changed player ownership is replaced");
+    EXPECT(slots.instanceIds[0] == 303 && slots.instanceIds[1] == 202,
+           "unchanged player 2 keeps its slot while player 1 is reclaimed");
+}
+
+static void test_controller_foreground_reconciliation(void) {
+    BarrelPadControllerSlots slots;
+    uint16_t buttons[BARRELPAD_CONTROLLER_SLOT_COUNT] = {0x0040, 0, 0, 0};
+    int16_t axes[BARRELPAD_CONTROLLER_SLOT_COUNT] = {-18000, 0, 0, 0};
+    const int32_t beforeBackground[] = {401};
+    const int32_t afterForeground[] = {402};
+
+    BarrelPad_ControllerSlotsInit(&slots);
+    (void)BarrelPad_ControllerSlotsReconcile(&slots, beforeBackground, 1);
+    BarrelPadControllerSlotChanges changes = BarrelPad_ControllerSlotsReconcile(
+        &slots, afterForeground, 1);
+    release_fake_controller_input(changes, buttons, axes);
+
+    EXPECT(changes.releasedMask == 0x1 && changes.assignedMask == 0x1,
+           "foreground reconciliation replaces a missed stale identity");
+    EXPECT(slots.instanceIds[0] == 402, "foreground controller owns player 1");
+    EXPECT(buttons[0] == 0 && axes[0] == 0,
+           "foreground reconciliation does not revive held input");
 }
 
 static void test_default_layouts(void) {
@@ -150,6 +237,10 @@ int main(void) {
     test_stick_clamp();
     test_layout_kind();
     test_touch_controller_takeover();
+    test_controller_missed_removal_releases_input();
+    test_controller_return_and_additional_slots();
+    test_controller_two_player_preservation();
+    test_controller_foreground_reconciliation();
     test_default_layouts();
     test_safe_area();
     test_host_key_tokens_dkr();

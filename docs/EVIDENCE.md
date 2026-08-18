@@ -1,5 +1,41 @@
 # Test evidence ledger
 
+## 2026-08-18 — SDL2 controller sleep/reconnect repair and Preview 2
+
+- Backend: Golden Balloon's SDL2 `SDL_GameController` layer owns four stored
+  handles as Player 1–4. The pre-fix code opened on startup/add and closed only
+  on remove events; it did not validate attachment, enumerate current instance
+  IDs on resume, or clear a missed stale owner.
+- Repair: valid instance owners retain their slots; stale handles are closed and
+  their buttons/axes neutralized; new identities take the lowest free slot.
+  Reconciliation runs at startup, controller add/remove/remap, foreground, and
+  a bounded active check. Gameplay reads only attached handles, and SDL is not
+  restarted.
+- Deterministic coverage passes for missed removal with held input, neutral
+  state after release, sole-controller Player 1 reclaim, an additional Player 2,
+  preservation of an unchanged second controller, and foreground reconciliation.
+- The ROM-free iPad Simulator and arm64 iPhoneOS Release products compiled. All
+  101 practical host tests passed in the final full run. Repo safety, clean
+  patch replay, diff checks, and focused tests pass.
+- Signed build `0.1.0` (`2`) passed strict code-sign verification and installed
+  in place as `com.chrissotraidis.barrelpad` on the 12.9-inch iPad Pro. The live
+  process reached Apple M2 WebGPU initialization, verified and loaded the
+  supported local ROM, entered the game boot path, and logged startup plus
+  foreground controller reconciliation.
+- `Documents` and `Library` were backed up separately before installation.
+  Readback proved the ROM, current EEPROM, three autosaves, app config, and
+  customized tablet layout byte-identical. No user mapping file was present;
+  the repair does not alter Golden Balloon mapping/preferences storage.
+- No physical controller was connected during this deployment. Bluetooth,
+  wired, natural sleep/wake, held-input release on real hardware, full mapping,
+  touch restoration, and two-controller slot preservation remain explicit
+  hands-on gates.
+- `BarrelPad-0.1.0-preview.2-unsigned.ipa` is a deterministic, unsigned,
+  ROM-free arm64 package. Two builds were byte-identical; SHA-256 is
+  `a486d99a4c13e1643bff6036b11c588960d0b94df4798825e0aa101f4eed179c`.
+  The audit passed ZIP, platform/minimum OS, version/build, dependency, rights,
+  privacy-manifest, signature-removal, and private-content checks.
+
 ## 2026-08-07 — Unified touch settings and controller takeover
 
 - iPhone and iPad now share the same direct `•••` navigation: **Touch Controls**

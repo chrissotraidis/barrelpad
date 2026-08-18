@@ -45,6 +45,15 @@ if [ -f "$CONTROLLER_TAKEOVER" ]; then
     echo "[BarrelPad] controller-takeover patch already applied or not clean"
   fi
 fi
+CONTROLLER_RECONCILE="$ROOT/patches/goldenballoon-ios-controller-reconcile.patch"
+if [ -f "$CONTROLLER_RECONCILE" ]; then
+  if (cd "$SRC" && patch -p1 --forward --dry-run < "$CONTROLLER_RECONCILE" >/dev/null 2>&1); then
+    (cd "$SRC" && patch -p1 --forward < "$CONTROLLER_RECONCILE")
+    echo "[BarrelPad] applied goldenballoon-ios-controller-reconcile.patch"
+  else
+    echo "[BarrelPad] controller-reconcile patch already applied or not clean"
+  fi
+fi
 OVERLAY_INPUT_RESUME="$ROOT/patches/goldenballoon-overlay-input-resume.patch"
 if [ -f "$OVERLAY_INPUT_RESUME" ]; then
   if (cd "$SRC" && patch -p1 --forward --dry-run < "$OVERLAY_INPUT_RESUME" >/dev/null 2>&1); then
@@ -57,6 +66,7 @@ fi
 mkdir -p "$SRC/platform/barrelpad"
 cp -f "$ROOT/ios/BarrelPadShell.mm" "$ROOT/ios/BarrelPadTouchControls.h" \
   "$ROOT/src/BarrelPadInput.c" "$ROOT/src/BarrelPadInput.h" \
+  "$ROOT/src/BarrelPadControllerSlots.h" \
   "$SRC/platform/barrelpad/"
 if [ -f "$ROOT/ios/BarrelPadRomBoot.mm" ]; then
   cp -f "$ROOT/ios/BarrelPadRomBoot.mm" "$ROOT/ios/BarrelPadRomBoot.h" \
