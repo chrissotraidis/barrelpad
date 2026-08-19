@@ -41,14 +41,15 @@ BARRELPAD_INPUT_SCRIPT=ref/goldenballoon/tests/input_scripts/race_drive_time_tri
   impacts, the kart may remain oriented sideways until it enters water. Do not
   change collision or vehicle physics before release without a captured
   bad-state transition and regression test; see [ISSUES.md](ISSUES.md#kart-01--sideways-orientation-after-a-closed-door-impact).
-- Preview 2 is a published, audited ROM-free unsigned release. It must be
+- Preview 3 is a published, audited ROM-free unsigned release. It must be
   re-signed before standard device installation; its SHA-256 is
-  `b2f7127113a526ce8c1fa3306f1afb4b6fb784270f3cf14c983c3cb0d8c9c7ed`.
+  `aa87d252d80fba8f7a0b41fd3b2243c01d958fadedbf92c7e4e22f36603d64d0`.
 - SDL2 controller ownership now reconciles stale handles and instance IDs at
   lifecycle/event boundaries while preserving stable player slots. Automated
   regression and iPad deployment/data-preservation proof pass, but physical
   Bluetooth, wired, natural-sleep, mapping, and two-controller acceptance are
   still open.
 - iOS keeps the recommended fill-screen `Aspect=auto` default but no longer
-  fixes it through the environment. The standard aspect selector is available
-  in Settings; physical 4:3 selection/persistence remains a hands-on check.
+  fixes Aspect or Presentation through the environment. Both selectors are
+  available in Settings; an in-place iPhone 14 build was visually accepted,
+  while issue #4 remains open for the reporter's iPhone 15 Pro Max confirmation.
