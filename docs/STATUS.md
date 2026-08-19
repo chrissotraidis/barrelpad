@@ -12,12 +12,12 @@ Last updated: 2026-08-19
 
 Playable = DKR game (not host launcher) reaches race/track gameplay with control response.
 
-## Preview 2 release
+## Preview 3 release
 
-- Version `0.1.0` (build `2`), tag `v0.1.0-preview.2`.
+- Version `0.1.0` (build `3`), tag `v0.1.0-preview.3`.
 - Public release: unsigned, re-signable arm64 IPA for iPhone and iPad running
   iOS/iPadOS 15 or later.
-- IPA SHA-256: `b2f7127113a526ce8c1fa3306f1afb4b6fb784270f3cf14c983c3cb0d8c9c7ed`.
+- IPA SHA-256: `aa87d252d80fba8f7a0b41fd3b2243c01d958fadedbf92c7e4e22f36603d64d0`.
 - Package audit rejects ROMs, saves, signing material, non-system runtime
   dependencies, code signatures, local build rpaths, and personal build paths.
 - The IPA includes an accurate `NSUserDefaults` privacy declaration, rights,
@@ -50,6 +50,11 @@ Playable = DKR game (not host launcher) reaches race/track gameplay with control
 - On an iPhone 15 Pro Max Simulator, Preview 1 rejected `Video.Aspect=4:3`
   because `MDKR_ASPECT` owned the setting. Preview 2 accepted and persisted
   the same value, and the engine reported a forced `1.33333` aspect ratio.
+- Preview 3 also removes the redundant iOS `MDKR_WIDESCREEN=1` environment
+  owner. Fullscreen and the recommended Auto aspect remain the defaults, while
+  Aspect and Presentation are both selectable. The Presentation transaction,
+  4:3 framing, ROM boot, touch input, and in-place data preservation passed on
+  an iPhone 14; issue #4 remains open for the reporter's iPhone 15 Pro Max check.
 
 ### Touch controls (2026-08-07)
 

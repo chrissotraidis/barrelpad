@@ -1,5 +1,31 @@
 # Test evidence ledger
 
+## 2026-08-19 — iOS Presentation unlock and Preview 3 release
+
+- Root cause: BarrelPad correctly stopped forcing `MDKR_ASPECT`, but still set
+  `MDKR_WIDESCREEN=1` through the environment. The video configuration treats
+  any environment-owned presentation setting as a reason to disable the entire
+  Presentation preset control, even though every shipped preset already enables
+  widescreen.
+- Repair: iOS continues to force only fullscreen. The normal defaults retain
+  Auto fill-screen and Hor+ widescreen rendering, while Aspect and Presentation
+  are player-selectable. Aggregate-lock text now identifies another fixed
+  presentation setting instead of rendering `Fixed by the you`.
+- Clean patch replay, BarrelPad unit/policy tests, display-layout tests, arm64
+  Simulator and iPhoneOS builds, strict signing verification, and Simulator
+  `Video.Mode=pure` transaction proof pass. The 4:3 presentation remains a
+  centered full-height `1720x1290` frame on the iPhone 15 Pro Max profile.
+- The signed build installed in place and launched on an iPhone 14. The ROM,
+  EEPROM, three autosaves, and app preference file were byte-identical before
+  install, after install, and after launch. The ROM verified and loaded, touch
+  input was live, and the user confirmed that both selectors are available and
+  the build appears to fix the report.
+- `BarrelPad-0.1.0-preview.3-unsigned.ipa` is an audited, unsigned, ROM-free
+  arm64 package for iOS/iPadOS 15 or later. Two packaging runs were
+  byte-identical; SHA-256 is
+  `aa87d252d80fba8f7a0b41fd3b2243c01d958fadedbf92c7e4e22f36603d64d0`.
+  Reporter confirmation on an iPhone 15 Pro Max remains open in issue #4.
+
 ## 2026-08-19 — SDL2 controller sleep/reconnect repair and Preview 2 release
 
 - Backend: Golden Balloon's SDL2 `SDL_GameController` layer owns four stored

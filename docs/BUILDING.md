@@ -45,7 +45,7 @@ To create the same ROM-free, re-signable IPA shape used for releases:
 
 ```sh
 scripts/package-ios.sh build-ios-device/BarrelPad.app \
-  dist/BarrelPad-0.1.0-preview.2-unsigned.ipa
+  dist/BarrelPad-0.1.0-preview.3-unsigned.ipa
 ```
 
 The packager removes local signing, rejects ROMs, saves, profiles, private
