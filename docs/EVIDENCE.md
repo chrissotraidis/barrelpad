@@ -1,6 +1,6 @@
 # Test evidence ledger
 
-## 2026-08-18 — SDL2 controller sleep/reconnect repair and Preview 2 candidate
+## 2026-08-19 — SDL2 controller sleep/reconnect repair and Preview 2 release
 
 - Backend: Golden Balloon's SDL2 `SDL_GameController` layer owns four stored
   handles as Player 1–4. The pre-fix code opened on startup/add and closed only
@@ -19,6 +19,10 @@
   Auto (Fill Screen), 4:3 (Original), 16:10, 16:9, and 21:9. Configuration,
   persistence, launcher UI, clean patch replay, macOS, and iPhoneOS build checks
   pass; physically selecting and relaunching a framed ratio remains open.
+- Exact iPhone 15 Pro Max Simulator comparison reproduced the release gap:
+  Preview 1 rejected `Video.Aspect=4:3` with the environment-owned lock, while
+  Preview 2 accepted and persisted it and booted the renderer with
+  `aspect=forced(1.33333)` before the expected no-ROM stop.
 - The ROM-free iPad Simulator and arm64 iPhoneOS Release products compiled. All
   101 practical host tests passed in the final full run. Repo safety, clean
   patch replay, diff checks, and focused tests pass.
