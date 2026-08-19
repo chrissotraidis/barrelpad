@@ -382,6 +382,16 @@ index d387cf3..a51cd89 100644
          case MDKR_VIDEO_MODE:
              // The section introduction directly above this control explains the
              // three modes; repeating the schema paragraph creates a text wall.
+@@ -601,6 +613,9 @@ bool drawKey(SDL_Window *window, MdkrVideoKey k, bool compact) {
+             ui::TextSubtle("Fixed by a command-line option for this session.");
+         } else if (d->source == MDKR_VIDEO_SOURCE_ENV) {
+             ui::TextSubtle("Fixed by %s for this session.", s->env);
++        } else if (k == MDKR_VIDEO_MODE) {
++            ui::TextSubtle(
++                "Another presentation setting is fixed for this session.");
+         } else {
+             ui::TextSubtle("Fixed by the %s for this session.",
+                            sourceName(d->source));
 @@ -953,12 +953,16 @@ bool Settings_draw(SDL_Window *window, bool compact) {
          const bool touchScalePreviewChanged = ImGui::SliderFloat(
              "##touch-scale", &g_touchScaleEdit, 0.75f, 1.5f, "%.2fx",
