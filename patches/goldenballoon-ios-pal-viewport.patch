@@ -80,3 +80,51 @@ index 817ea6b..15051bd 100644
          posX -= 4;
      }
  #ifdef NATIVE_PORT
+diff --git a/game/src/game_ui.c b/game/src/game_ui.c
+index 35bfa16..3bee04b 100644
+--- a/game/src/game_ui.c
++++ b/game/src/game_ui.c
+@@ -4223,6 +4223,7 @@ void hud_render_general(Gfx **dList, Mtx **mtx, Vertex **vtx, s32 updateRate) {
+     s32 temp_f6;
+     s32 temp_s3;
+     s32 temp;
++    s32 applyPalMinimapOffsets;
+     UNUSED s32 pad3[4];
+ 
+     hud_audio_update(updateRate);
+@@ -4480,6 +4481,10 @@ void hud_render_general(Gfx **dList, Mtx **mtx, Vertex **vtx, s32 updateRate) {
+     someObjSeg = cam_get_active_camera();
+     cam_set_sprite_anim_mode(SPRITE_ANIM_FRAME_INDEX);
+     minimap = DKR_PTR(Sprite, lvlMdl->minimapSpriteIndex);
++    applyPalMinimapOffsets = osTvType == OS_TV_TYPE_PAL;
++#ifdef NATIVE_PORT
++    applyPalMinimapOffsets = FALSE;
++#endif
+     switch (gHUDNumPlayers) {
+         case TWO_PLAYERS:
+             gMinimapScreenX = 135;
+@@ -4504,13 +4509,13 @@ void hud_render_general(Gfx **dList, Mtx **mtx, Vertex **vtx, s32 updateRate) {
+             gMinimapScreenY = -98;
+             break;
+     }
+-    if (osTvType == OS_TV_TYPE_PAL) {
++    if (applyPalMinimapOffsets) {
+         gMinimapScreenY *= 1.2;
+     }
+     sprite_opaque(FALSE);
+     hudElem.pos.x = gMinimapScreenX + gHudOffsetX + gHudBounceX;
+     hudElem.pos.y = gMinimapScreenY;
+-    if (osTvType == OS_TV_TYPE_PAL) {
++    if (applyPalMinimapOffsets) {
+         hudElem.pos.x -= 4.0f;
+     }
+     hudElem.rotation.z_rotation = -someObjSeg->trans.rotation.z_rotation;
+@@ -4646,7 +4651,7 @@ void hud_render_general(Gfx **dList, Mtx **mtx, Vertex **vtx, s32 updateRate) {
+                                 gHudMinimapColours[someRacer->characterId].blue, opacity);
+             }
+             if (!(level_type() & RACETYPE_CHALLENGE) || (!someRacer->raceFinished)) {
+-                if (osTvType == OS_TV_TYPE_PAL) {
++                if (applyPalMinimapOffsets) {
+                     gCurrentHud->entry[HUD_MINIMAP_MARKER].pos.x -= 4.0f;
+                 }
+                 if (level_type() == RACETYPE_CHALLENGE_BATTLE) {
