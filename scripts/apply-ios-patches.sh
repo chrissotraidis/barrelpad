@@ -34,6 +34,15 @@ if [ -f "$PHONE_SETTINGS" ]; then
     echo "[BarrelPad] phone-settings patch already applied or not clean"
   fi
 fi
+PAL_VIEWPORT="$ROOT/patches/goldenballoon-ios-pal-viewport.patch"
+if [ -f "$PAL_VIEWPORT" ]; then
+  if (cd "$SRC" && patch -p1 --forward --dry-run < "$PAL_VIEWPORT" >/dev/null 2>&1); then
+    (cd "$SRC" && patch -p1 --forward < "$PAL_VIEWPORT")
+    echo "[BarrelPad] applied goldenballoon-ios-pal-viewport.patch"
+  else
+    echo "[BarrelPad] PAL viewport patch already applied or not clean"
+  fi
+fi
 # Direct P1 pad inject (shell → platform_ios_touch_set → input queue).
 python3 "$ROOT/scripts/ensure-ios-touch-inject.py" "$SRC"
 CONTROLLER_TAKEOVER="$ROOT/patches/goldenballoon-ios-controller-takeover.patch"
