@@ -9,6 +9,7 @@ clang -std=c11 -O2 -Wall -Wextra -Isrc \
   "$ROOT/tests/test_barrelpad_input.c" \
   -lm
 "$OUT/test_barrelpad_input"
+python3 "$ROOT/tests/test_pal_native_viewport.py"
 
 BOOT_POLICY="$ROOT/ios/BarrelPadRomBoot.mm"
 FULL_PATCH="$ROOT/patches/goldenballoon-ios-full.patch"

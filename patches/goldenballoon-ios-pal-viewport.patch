@@ -1,0 +1,82 @@
+diff --git a/game/src/camera.c b/game/src/camera.c
+index 817ea6b..15051bd 100644
+--- a/game/src/camera.c
++++ b/game/src/camera.c
+@@ -1257,6 +1257,7 @@ void viewport_main(Gfx **dlist, Mtx **mats) {
+     s32 originalCameraID;
+     s32 savedCameraID;
+     s32 tempCameraID;
++    s32 applyPalViewportOffsets;
+ 
+     originalCameraID = gActiveCameraID;
+     savedCameraID = gActiveCameraID;
+@@ -1299,6 +1300,24 @@ void viewport_main(Gfx **dlist, Mtx **mats) {
+         return;
+     }
+ 
++    applyPalViewportOffsets = osTvType == OS_TV_TYPE_PAL;
++#ifdef NATIVE_PORT
++    /*
++     * Retail PAL draws into a taller 320x264 framebuffer and shifts the camera
++     * four logical pixels left for the analogue VI aperture. On a modern host
++     * the display policy already owns aspect fitting and letterboxing. Scaling
++     * that television adjustment to a phone turns the four-pixel shift into a
++     * 35-pixel right gutter at 2796px, while the taller scissor spills into one
++     * side of forced-aspect letterboxing. Normalize only the ordinary native
++     * world viewport; the framed VIEWPORT_EXTRA_BG path returned above and all
++     * PAL simulation/content policy remain unchanged.
++     */
++    if (applyPalViewportOffsets) {
++        videoHeight = SCREEN_HEIGHT;
++        applyPalViewportOffsets = FALSE;
++    }
++#endif
++
+     viewports = gViewportLayout;
+     if (viewports == VIEWPORT_LAYOUT_3_PLAYERS) {
+         viewports = VIEWPORT_LAYOUT_4_PLAYERS;
+@@ -1310,7 +1329,7 @@ void viewport_main(Gfx **dlist, Mtx **mats) {
+     posX = sp54_width;
+     posY = sp58_height;
+ 
+-    if (osTvType == 0) {
++    if (applyPalViewportOffsets) {
+         sp58_height = 145;
+     }
+ 
+@@ -1318,7 +1337,7 @@ void viewport_main(Gfx **dlist, Mtx **mats) {
+         case VIEWPORT_LAYOUT_1_PLAYER:
+             posX = sp54_width;
+             posY = sp58_height;
+-            if (osTvType == OS_TV_TYPE_PAL) {
++            if (applyPalViewportOffsets) {
+                 posY -= 18;
+             }
+             gDPSetScissor((*dlist)++, SCISSOR_INTERLACE, 0, 0, videoWidth, videoHeight);
+@@ -1330,7 +1349,7 @@ void viewport_main(Gfx **dlist, Mtx **mats) {
+             posY = gActiveCameraID;
+             if (posY == 0) {
+                 posY = videoHeight >> 2;
+-                if (osTvType == OS_TV_TYPE_PAL) {
++                if (applyPalViewportOffsets) {
+                     posY -= 12;
+                 }
+                 gDPSetScissor((*dlist)++, SCISSOR_INTERLACE, 0, 0, videoWidth, y - (videoHeight >> 7));
+@@ -1404,7 +1423,7 @@ void viewport_main(Gfx **dlist, Mtx **mats) {
+             }
+             posY = tempX + sp58_height;
+             posX = tempY + sp54_width;
+-            if (osTvType == OS_TV_TYPE_PAL) {
++            if (applyPalViewportOffsets) {
+                 if (gActiveCameraID <= 1) {
+                     posY -= 20;
+                 } else {
+@@ -1418,7 +1437,7 @@ void viewport_main(Gfx **dlist, Mtx **mats) {
+             break;
+     }
+ 
+-    if (osTvType == OS_TV_TYPE_PAL) {
++    if (applyPalViewportOffsets) {
+         posX -= 4;
+     }
+ #ifdef NATIVE_PORT
