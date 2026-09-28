@@ -39,7 +39,6 @@ ROM, extracted Nintendo/Rare assets, or a playable game archive. See the
 | Local macOS build | **Available now** | Build with `scripts/build-macos.sh`, then launch with your supported ROM. |
 | iPhone / iPad Simulator | **Available now** | Build with `scripts/build-ios.sh --simulator`, then run `scripts/run-ios-sim.sh phone` or `pad`. |
 | Physical iPhone / iPad | **Tested locally** | Build an unsigned device app with `scripts/build-ios.sh --device`, then sign it with your Apple development identity and provisioning profile. |
-| Public `.ipa` | **Preview 5 available** | Download the [ROM-free unsigned IPA](https://github.com/chrissotraidis/barrelpad/releases/download/v0.1.0-preview.5/BarrelPad-0.1.0-preview.5-unsigned.ipa), then re-sign it for your device. |
 | App Store / TestFlight | **Not announced** | No App Store listing or public TestFlight exists. |
 
 The current development build has been signed, installed, launched, and played
@@ -220,12 +219,7 @@ scripts/test-unit.sh
 <details>
 <summary><strong>Where is the IPA?</strong></summary>
 
-[Preview 5](https://github.com/chrissotraidis/barrelpad/releases/tag/v0.1.0-preview.5)
-provides an unsigned, ROM-free IPA for iPhone and iPad. It contains no game
-data and must be re-signed with your own Apple development credentials before
-standard device installation. Verify it with the
-[published checksum](https://github.com/chrissotraidis/barrelpad/releases/download/v0.1.0-preview.5/BarrelPad-0.1.0-preview.5-unsigned.ipa.sha256):
-`5289444e304a7b0777af587a9f1ff87f792c97087a45555545b437344a6fb3b6`.
+Previous builds have been retired; a new version is in progress.
 </details>
 
 <details>
