@@ -28,21 +28,18 @@
         {
           "stage": "preflight",
           "command": [
-            "/bin/bash",
             "{repo}/scripts/check-repo-safety.sh"
           ]
         },
         {
           "stage": "dependencies",
           "command": [
-            "/bin/bash",
             "{repo}/scripts/clone-refs.sh"
           ]
         },
         {
           "stage": "compile",
           "command": [
-            "/bin/bash",
             "{repo}/scripts/build-ios.sh",
             "--device"
           ]
@@ -50,7 +47,6 @@
         {
           "stage": "package",
           "command": [
-            "/bin/bash",
             "{repo}/scripts/package-ios.sh",
             "{repo}/build-ios-device/BarrelPad.app",
             "{output}"
