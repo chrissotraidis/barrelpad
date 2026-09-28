@@ -11,7 +11,9 @@ GB_URL="${GB_URL:-https://github.com/akratch/goldenballoon.git}"
 GB_PIN="${GB_PIN:-6fc93d886b090b22eb39d90fada535faa7282f2d}"
 
 clone_pin() {
-  local name="$1" url="$2" pin="$3" dir="$REF/$name"
+  # Separate declarations: macOS bash 3.2 expands $name before assigning it.
+  local name="$1" url="$2" pin="$3"
+  local dir="$REF/$name"
   if [ -d "$dir/.git" ]; then
     echo "[BarrelPad] updating $name"
     git -C "$dir" fetch --depth 1 origin "$pin" 2>/dev/null || \
