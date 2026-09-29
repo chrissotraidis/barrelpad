@@ -36,6 +36,7 @@ ROM, extracted Nintendo/Rare assets, or a playable game archive. See the
 
 | Option | Status | What to do |
 |---|---|---|
+| Make your own with PadForge | **Available** | See [Get started](#get-started). Releases hold the recipe only. |
 | Local macOS build | **Available now** | Build with `scripts/build-macos.sh`, then launch with your supported ROM. |
 | iPhone / iPad Simulator | **Available now** | Build with `scripts/build-ios.sh --simulator`, then run `scripts/run-ios-sim.sh phone` or `pad`. |
 | Physical iPhone / iPad | **Tested locally** | Build an unsigned device app with `scripts/build-ios.sh --device`, then sign it with your Apple development identity and provisioning profile. |
@@ -47,6 +48,18 @@ boot, touch gameplay, editable controls, settings scrolling, save files, and
 in-place updates have been exercised on both device classes.
 
 ## Get started
+
+**The easy way:** releases publish no app, because BarrelPad is compiled from
+the Diddy Kong Racing decompilation; you make your own. On an Apple Silicon Mac
+with Xcode and `brew install cmake ninja pkgconf`, download
+[PadForge](https://github.com/chrissotraidis/padforge/releases/latest), unzip it,
+double-click `PadForge.command` and choose BarrelPad. PadForge builds BarrelPad
+from this repository's [latest release](https://github.com/chrissotraidis/barrelpad/releases/latest)
+and saves an unsigned IPA in the folder you choose. Install it with AltStore
+Classic, SideStore or Sideloadly, then choose your ROM in the app (see
+[First launch](#first-launch)).
+
+**By hand:**
 
 You need:
 
@@ -219,7 +232,8 @@ scripts/test-unit.sh
 <details>
 <summary><strong>Where is the IPA?</strong></summary>
 
-Previous builds have been retired; a new version is in progress.
+There is no public IPA: BarrelPad is compiled from the decompilation, so PadForge
+builds your own on an Apple Silicon Mac. See [Get started](#get-started).
 </details>
 
 <details>
