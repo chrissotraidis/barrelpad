@@ -55,7 +55,7 @@ with Xcode and `brew install cmake ninja pkgconf`, download
 [PadMint](https://github.com/chrissotraidis/padmint/releases/latest), unzip it,
 double-click `PadMint.command` and choose BarrelPad. PadMint builds BarrelPad
 from this repository's [latest release](https://github.com/chrissotraidis/barrelpad/releases/latest)
-and saves an unsigned IPA in the folder you choose. Install it with AltStore
+and saves an unsigned IPA in your Downloads folder. Install it with AltStore
 Classic, SideStore or Sideloadly, then choose your ROM in the app (see
 [First launch](#first-launch)).
 
