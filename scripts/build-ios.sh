@@ -85,7 +85,7 @@ fi
 # Apps without modern launch-screen metadata are placed in the legacy 480x320
 # iPhone compatibility canvas. Always package the reviewed native template.
 cp -f "$ROOT/ios/Info.plist" "$APP/Info.plist"
-# One version for the app, its release and PadForge: version.json.
+# One version for the app, its release and PadMint: version.json.
 version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$ROOT/version.json")"
 build_number="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["build"])' "$ROOT/version.json")"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" -c "Set :CFBundleVersion $build_number" "$APP/Info.plist"
