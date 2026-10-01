@@ -88,6 +88,14 @@
         ]
       },
       {
+        "name": "pkg-config",
+        "version_args": [
+          "--version"
+        ],
+        "player": true,
+        "note": "Install pkg-config to find the locally built SDL2: brew install pkgconf"
+      },
+      {
         "name": "xcodebuild",
         "version_args": [
           "-version"
