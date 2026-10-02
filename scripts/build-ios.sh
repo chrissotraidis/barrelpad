@@ -15,6 +15,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+source "$ROOT/scripts/build-jobs.sh"
+JOBS="$(barrelpad_build_jobs)"
+
 if [ "$MODE" = "device" ]; then
   SDK="iphoneos"
   IOS_SIMULATOR="OFF"
@@ -40,7 +43,7 @@ fi
 SDL_PREFIX="${BARRELPAD_SDL_IOS:-$SDL_DEFAULT}"
 if [ ! -f "$SDL_PREFIX/lib/libSDL2.a" ]; then
   echo "[BarrelPad] building SDL2 for iOS $MODE..."
-  "$ROOT/scripts/build-sdl2-ios.sh" "--$MODE"
+  BARRELPAD_JOBS="$JOBS" "$ROOT/scripts/build-sdl2-ios.sh" "--$MODE"
 fi
 
 export PKG_CONFIG_PATH="$SDL_PREFIX/lib/pkgconfig"
@@ -59,7 +62,7 @@ cmake -S "$SOURCE" -B "$BUILD" \
   -DBUILD_TESTING=OFF \
   -DCMAKE_PREFIX_PATH="$SDL_PREFIX"
 
-cmake --build "$BUILD" -j"${BARRELPAD_JOBS:-$(sysctl -n hw.ncpu)}" --target mdkr64
+cmake --build "$BUILD" -j"$JOBS" --target mdkr64
 
 # Package BarrelPad.app
 APP="$BUILD/BarrelPad.app"

@@ -19,6 +19,9 @@ case "$MODE" in
     exit 2
     ;;
 esac
+source "$ROOT/scripts/build-jobs.sh"
+JOBS="$(barrelpad_build_jobs)"
+
 SDL_VER="${SDL_VER:-2.32.10}"
 WORK="${BARRELPAD_SDL_WORK:-$ROOT/build-deps/src}"
 PREFIX="${BARRELPAD_SDL_IOS:-$DEFAULT_PREFIX}"
@@ -42,7 +45,7 @@ cmake -S "SDL2-$SDL_VER" -B "$BUILD" \
   -DSDL_TEST=OFF \
   -DCMAKE_BUILD_TYPE=Release \
   -G Ninja
-cmake --build "$BUILD" -j"$(sysctl -n hw.ncpu)"
+cmake --build "$BUILD" -j"$JOBS"
 cmake --install "$BUILD" --prefix "$PREFIX"
 # Fix pkg-config prefix
 if [ -f "$PREFIX/lib/pkgconfig/sdl2.pc" ]; then
