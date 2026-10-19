@@ -286,3 +286,12 @@ BarrelPad is an unofficial community project and is not affiliated with or
 endorsed by Nintendo, Rare, Microsoft, or their subsidiaries. Diddy Kong Racing
 and related names, characters, artwork, and trademarks belong to their
 respective owners. No game data is included.
+
+## Legal
+
+BarrelPad is an unofficial, fan-made project. It is not affiliated with,
+endorsed by, or sponsored by Nintendo. Diddy Kong Racing and related names and
+marks are trademarks of Nintendo (and their respective owners). This repository
+contains no game data, ROMs, or extracted assets. To use it, you need your own
+legally obtained copy of the game, and you build it yourself on your own
+machine. Please don't share game files or builds made from them.
