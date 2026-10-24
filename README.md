@@ -62,6 +62,10 @@ and saves an unsigned IPA in your Downloads folder. Install it with AltStore
 Classic, SideStore or Sideloadly, then choose your ROM in the app (see
 [First launch](#first-launch)).
 
+**No Mac?** You can build the iPhone and iPad app on GitHub's free Mac from Windows,
+Linux or any computer with a web browser: follow
+[PadMint's steps](https://github.com/chrissotraidis/padmint#no-mac-build-on-githubs-mac).
+
 **By hand:**
 
 You need:
@@ -96,7 +100,7 @@ scripts/build-ios.sh --device
 
 # Audited, ROM-free, re-signable IPA
 scripts/package-ios.sh build-ios-device/BarrelPad.app \
-  dist/BarrelPad-0.1.0-preview.5-unsigned.ipa
+  dist/BarrelPad-0.2.1-unsigned.ipa
 ```
 
 The iOS products are written to `build-ios-sim/BarrelPad.app` and
@@ -225,7 +229,7 @@ scripts/test-unit.sh
 <summary><strong>Where is the IPA?</strong></summary>
 
 There is no public IPA: BarrelPad is compiled from the decompilation, so PadMint
-builds your own on an Apple Silicon Mac. See [Get started](#get-started).
+builds your own on an Apple Silicon Mac or on GitHub's free Mac. See [Get started](#get-started).
 </details>
 
 <details>
