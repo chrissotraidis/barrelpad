@@ -18,8 +18,14 @@ static float clampf(float v, float lo, float hi) {
 }
 
 bool BarrelPad_GameplayTouchEnabled(bool preferenceEnabled,
+                                    bool autoHideWithController,
                                     bool physicalControllerConnected) {
-    return preferenceEnabled && !physicalControllerConnected;
+    return preferenceEnabled &&
+           !(autoHideWithController && physicalControllerConnected);
+}
+
+bool BarrelPad_SavedAutoHide(bool hasSavedChoice, bool savedChoice) {
+    return hasSavedChoice ? savedChoice : true;
 }
 
 BarrelPadStickState BarrelPad_StickFromTouch(float dx, float dy, float radius) {

@@ -49,9 +49,15 @@ closes the editor, clears any held input, and restores the gameplay touch path.
 - **Show gameplay touch controls** is available directly from `•••` on both
   iPhone and iPad and persists across launches.
 - The `•••` menu button remains visible even when gameplay controls are off.
-- A physical SDL controller takes Player 1 and temporarily hides the gameplay
-  touch overlay. Disconnecting it restores touch only when the saved preference
-  is enabled.
+- A usable physical SDL controller (left stick plus A, B and Start) on Player 1
+  temporarily hides the gameplay touch overlay while **Auto-hide Touch Controls
+  with Controller** is on. That setting is in the same panel, starts on until
+  the player changes it, and persists. A controller on Player 2–4 never hides
+  Player 1's touch controls. Disconnecting restores touch only when the saved
+  preference is enabled.
+- While gameplay touch is hidden, the panel offers **Show Touch Controls**. It
+  closes the menu, restores working touch input with the controller still
+  connected, and turns auto-hide off until the player turns it back on.
 - Touch uses direct P1 injection instead of registering a virtual SDL controller,
   so the shell cannot occupy Player 1 before real hardware connects.
 - Golden Balloon's SDL2 layer remains the controller owner. It reconciles

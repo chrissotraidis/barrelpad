@@ -22,18 +22,33 @@ diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
  /* DKR's current motor request per port. Kept separate from the user mute/profile
   * so a live preference change can stop or refresh an already-running effect. */
  static Uint8 s_rumbleRequested[DKR_MAXPADS] = { 0, 0, 0, 0 };
-@@ -1309,7 +1316,9 @@
+@@ -1306,14 +1313,18 @@
+ extern __attribute__((weak)) void
+ platform_ios_physical_controller_changed(int connected);
+ 
  static void ios_notify_physical_controller_state(void) {
-     int connected = 0;
-     for (int i = 0; i < DKR_MAXPADS; ++i) {
+-    int connected = 0;
+-    for (int i = 0; i < DKR_MAXPADS; ++i) {
 -        if (s_gc[i] != NULL && !s_gcIsVirtual[i]) {
-+        if (s_gc[i] != NULL &&
-+            SDL_GameControllerGetAttached(s_gc[i]) == SDL_TRUE &&
-+            !s_gcIsVirtual[i]) {
-             connected = 1;
-             break;
-         }
-@@ -1320,6 +1329,7 @@
+-            connected = 1;
+-            break;
+-        }
+-    }
++    /* Touch drives Player 1, so only a usable, attached, non-virtual P1
++     * controller lets the touch overlay auto-hide. Controllers owned by other
++     * players never hide Player 1's touch controls. */
++    SDL_GameController *p1 = s_gc[0];
++    const int connected = p1 != NULL &&
++        SDL_GameControllerGetAttached(p1) == SDL_TRUE && !s_gcIsVirtual[0] &&
++        SDL_GameControllerHasAxis(p1, SDL_CONTROLLER_AXIS_LEFTX) &&
++        SDL_GameControllerHasAxis(p1, SDL_CONTROLLER_AXIS_LEFTY) &&
++        SDL_GameControllerHasButton(p1, SDL_CONTROLLER_BUTTON_A) &&
++        SDL_GameControllerHasButton(p1, SDL_CONTROLLER_BUTTON_B) &&
++        SDL_GameControllerHasButton(p1, SDL_CONTROLLER_BUTTON_START);
+     if (platform_ios_physical_controller_changed != NULL) {
+         platform_ios_physical_controller_changed(connected);
+     }
+@@ -1320,6 +1331,7 @@
  }
  #endif
  
@@ -41,7 +56,7 @@ diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
  static void gc_try_open(int deviceIndex) {
      if (!SDL_IsGameController(deviceIndex)) return;
      for (int i = 0; i < DKR_MAXPADS; i++) {
-@@ -1371,7 +1381,174 @@
+@@ -1371,7 +1383,174 @@
          }
      }
  }
@@ -216,7 +231,7 @@ diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
  void platform_input_init(void) {
      MdkrInputSample initial[MDKR_INPUT_PORTS];
      char packaged_mapping_path[4096];
-@@ -1424,7 +1601,13 @@
+@@ -1424,7 +1603,13 @@
      if (executable_base != NULL) {
          SDL_free(executable_base);
      }
@@ -230,7 +245,7 @@ diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
      for (int i = 0; i < DKR_MAXPADS; i++) {
          s_pads[i].buttons = 0;
          s_pads[i].stick_x = 0;
-@@ -1438,7 +1621,7 @@
+@@ -1438,7 +1623,7 @@
      int port;
      for (port = 0; port < DKR_MAXPADS; port++) {
          SDL_Joystick *joystick;
@@ -239,7 +254,7 @@ diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
              continue;
          }
          joystick = SDL_GameControllerGetJoystick(s_gc[port]);
-@@ -1766,12 +1949,12 @@
+@@ -1766,12 +1951,12 @@
      for (port = 0; port < DKR_MAXPADS; port++) {
          struct pad_state live = { 0, 0, 0, 0 };
          MdkrInputSample sample;
@@ -254,7 +269,7 @@ diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
                  gc_read(&s_controllerSource[port], &live);
              }
  #if defined(__APPLE__)
-@@ -1859,6 +2042,16 @@
+@@ -1859,6 +2044,16 @@
   * ticks; it never directly replaces the DKR-visible s_pads snapshot. */
  void platform_input_pump(void) {
      const uint64_t target_tick = present_sched_input_target_tick();
@@ -271,7 +286,7 @@ diff --git a/platform/platform_sdl_min.c b/platform/platform_sdl_min.c
  #ifdef MDKR_APP
      /* Applies deferred shell/window work after the previous present and before
       * any new frame acquires a drawable. No-op without registered app hooks. */
-@@ -1961,13 +2154,35 @@
+@@ -1961,13 +2156,35 @@
                      }
                      break;
                  case SDL_CONTROLLERDEVICEADDED:
