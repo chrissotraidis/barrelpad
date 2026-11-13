@@ -32,10 +32,16 @@ typedef enum BarrelPadLayoutKind {
     kBarrelPadLayoutTablet = 1
 } BarrelPadLayoutKind;
 
-/* Gameplay controls follow the saved preference, but a physical controller
- * temporarily takes over Player 1 without changing that preference. */
+/* Gameplay controls follow the saved preference. While the saved
+ * "Auto-hide Touch Controls with Controller" choice is on, a usable physical
+ * Player 1 controller temporarily hides them without changing that preference.
+ * "Show Touch Controls" sets the preference on and auto-hide off. */
 bool BarrelPad_GameplayTouchEnabled(bool preferenceEnabled,
+                                    bool autoHideWithController,
                                     bool physicalControllerConnected);
+
+/* Auto-hide starts on only for players who never chose; saved choices persist. */
+bool BarrelPad_SavedAutoHide(bool hasSavedChoice, bool savedChoice);
 
 /* Normalized layout rect in landscape UI coordinates: origin top-left,
  * x/y in [0,1], width/height relative to short/long edges of the safe area. */

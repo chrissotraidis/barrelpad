@@ -32,6 +32,7 @@ static std::atomic_bool sTouchStickActive(false);
 static std::atomic_bool sGameplayActive(true);
 static std::atomic_bool sPhysicalControllerConnected(false);
 static std::atomic_bool sTouchControlsDesired(true);
+static std::atomic_bool sTouchAutoHide(true);
 static BOOL sLayoutEditorActive = NO;
 /* Persistent player-facing touch overlay scale (0.5x-2.0x). Main-thread only;
  * written by platform_ios_touch_set_scale and read during layout. */
@@ -39,7 +40,8 @@ static float sTouchControlScale = 1.0f;
 
 static BOOL BarrelPad_TouchControlsEffective(void) {
     return BarrelPad_GameplayTouchEnabled(
-        sTouchControlsDesired.load(), sPhysicalControllerConnected.load());
+        sTouchControlsDesired.load(), sTouchAutoHide.load(),
+        sPhysicalControllerConnected.load());
 }
 
 void BarrelPad_Log(const char *fmt, ...) {
@@ -1158,6 +1160,14 @@ static void BarrelPad_RestoreTouchInputAfterEditing(void) {
     BarrelPad_Log("touch input restored after layout editing");
 }
 
+/* After a touch preference change, release anything held and re-publish the
+ * P1 touch source so the merge follows the new visibility immediately. */
+static void BarrelPad_ApplyTouchPreferenceChange(void) {
+    [sOverlay cancelAllInputs];
+    BarrelPad_ResetAllInputs();
+    BarrelPad_ApplyTouchControlsState();
+}
+
 static void BarrelPad_InstallOverlay(void) {
     if (sOverlay != nil || sSDLWindow == nil) {
         return;
@@ -1247,8 +1257,13 @@ void BarrelPad_InitializeTouchControls(void) {
     const std::string enabledText =
         AppConfig::get("touch_controls_enabled", "1");
     sTouchControlsDesired.store(enabledText != "0");
-    BarrelPad_Log("initialize touch controls enabled=%d",
-                  sTouchControlsDesired.load() ? 1 : 0);
+    const std::string autoHideText =
+        AppConfig::get("touch_controls_auto_hide", "");
+    sTouchAutoHide.store(BarrelPad_SavedAutoHide(!autoHideText.empty(),
+                                                 autoHideText != "0"));
+    BarrelPad_Log("initialize touch controls enabled=%d auto_hide=%d",
+                  sTouchControlsDesired.load() ? 1 : 0,
+                  sTouchAutoHide.load() ? 1 : 0);
     if (sSDLWindow != nil) {
         BarrelPad_InstallOverlay();
     }
@@ -1256,7 +1271,7 @@ void BarrelPad_InitializeTouchControls(void) {
 
 void BarrelPad_SetTouchControlsEnabled(int enabled) {
     sTouchControlsDesired.store(enabled != 0);
-    BarrelPad_ApplyTouchControlsState();
+    BarrelPad_ApplyTouchPreferenceChange();
 }
 
 void BarrelPad_SetGameplayActive(int active) {
@@ -1294,6 +1309,35 @@ extern "C" void platform_ios_touch_set_enabled(int enabled) {
 
 extern "C" int platform_ios_touch_physical_controller_connected(void) {
     return sPhysicalControllerConnected.load() ? 1 : 0;
+}
+
+extern "C" int platform_ios_touch_get_auto_hide(void) {
+    return sTouchAutoHide.load() ? 1 : 0;
+}
+
+extern "C" void platform_ios_touch_set_auto_hide(int enabled) {
+    AppConfig::setAndSave("touch_controls_auto_hide", enabled ? "1" : "0");
+    sTouchAutoHide.store(enabled != 0);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        BarrelPad_ApplyTouchPreferenceChange();
+        BarrelPad_Log("touch auto-hide preference=%d touch visible=%d",
+                      enabled ? 1 : 0, BarrelPad_TouchControlsEffective() ? 1 : 0);
+    });
+}
+
+/* "Show Touch Controls": working touch now, even with the controller still
+ * connected. Turns auto-hide off until the player turns it back on; player
+ * assignment is untouched. */
+extern "C" void platform_ios_touch_show(void) {
+    AppConfig::setAndSave("touch_controls_enabled", "1");
+    AppConfig::setAndSave("touch_controls_auto_hide", "0");
+    sTouchControlsDesired.store(true);
+    sTouchAutoHide.store(false);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        BarrelPad_ApplyTouchPreferenceChange();
+        BarrelPad_Log("show touch controls touch visible=%d",
+                      BarrelPad_TouchControlsEffective() ? 1 : 0);
+    });
 }
 
 extern "C" void platform_ios_physical_controller_changed(int connected) {

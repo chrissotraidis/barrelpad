@@ -54,14 +54,24 @@ static void test_layout_kind(void) {
 }
 
 static void test_touch_controller_takeover(void) {
-    EXPECT(BarrelPad_GameplayTouchEnabled(true, false),
+    EXPECT(BarrelPad_GameplayTouchEnabled(true, true, false),
            "saved-on touch is visible without a controller");
-    EXPECT(!BarrelPad_GameplayTouchEnabled(true, true),
+    EXPECT(!BarrelPad_GameplayTouchEnabled(true, true, true),
            "physical controller temporarily hides gameplay touch");
-    EXPECT(!BarrelPad_GameplayTouchEnabled(false, false),
+    EXPECT(!BarrelPad_GameplayTouchEnabled(false, true, false),
            "saved-off touch stays hidden without a controller");
-    EXPECT(!BarrelPad_GameplayTouchEnabled(false, true),
+    EXPECT(!BarrelPad_GameplayTouchEnabled(false, true, true),
            "saved-off touch stays hidden with a controller");
+    EXPECT(BarrelPad_GameplayTouchEnabled(true, false, true),
+           "auto-hide off keeps touch visible with a controller");
+    EXPECT(BarrelPad_SavedAutoHide(false, false),
+           "auto-hide defaults on without a saved choice");
+    EXPECT(!BarrelPad_SavedAutoHide(true, false),
+           "saved auto-hide opt-out survives relaunch");
+    /* Show Touch Controls = preference on, auto-hide off: visible while the
+     * controller stays connected. */
+    EXPECT(BarrelPad_GameplayTouchEnabled(true, false, true),
+           "Show restores touch with the controller connected");
 }
 
 static void release_fake_controller_input(
