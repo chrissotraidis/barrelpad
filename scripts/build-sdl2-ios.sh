@@ -7,12 +7,12 @@ case "$MODE" in
   --simulator)
     SDK="iphonesimulator"
     KIND="sim"
-    DEFAULT_PREFIX="$ROOT/build-deps/sdl2-ios-sim-scenes"
+    DEFAULT_PREFIX="$ROOT/build-deps/sdl2-ios-sim-scenes-v2"
     ;;
   --device)
     SDK="iphoneos"
     KIND="dev"
-    DEFAULT_PREFIX="$ROOT/build-deps/sdl2-ios-dev-scenes"
+    DEFAULT_PREFIX="$ROOT/build-deps/sdl2-ios-dev-scenes-v2"
     ;;
   *)
     echo "usage: $0 [--simulator|--device]" >&2
@@ -33,12 +33,17 @@ if [ ! -d "SDL2-$SDL_VER" ]; then
   tar xzf "SDL2-$SDL_VER.tar.gz"
 fi
 # UIKit scene startup for SDL 2.32.10: apps built with the iOS 27 SDK need it to
-# open. Applied once; an already-patched source is left as it is.
+# open. Applied once; an already-patched source is left as it is, and a source
+# carrying an earlier revision of the patch is extracted again.
 SCENE_PATCH="$ROOT/patches/sdl2-uikit-scenes.patch"
 if ! patch -d "SDL2-$SDL_VER" -p1 -R -s -f --dry-run < "$SCENE_PATCH" >/dev/null 2>&1; then
+  if ! patch -d "SDL2-$SDL_VER" -p1 -N -s -f --dry-run < "$SCENE_PATCH" >/dev/null 2>&1; then
+    rm -rf "SDL2-$SDL_VER"
+    tar xzf "SDL2-$SDL_VER.tar.gz"
+  fi
   patch -d "SDL2-$SDL_VER" -p1 -N -s < "$SCENE_PATCH"
 fi
-BUILD="$WORK/sdl2-ios-$KIND-scenes-build"
+BUILD="$WORK/sdl2-ios-$KIND-scenes-v2-build"
 cmake -S "SDL2-$SDL_VER" -B "$BUILD" \
   -DCMAKE_SYSTEM_NAME=iOS \
   -DCMAKE_OSX_SYSROOT="$SDK" \

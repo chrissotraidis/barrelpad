@@ -22,13 +22,13 @@ if [ "$MODE" = "device" ]; then
   SDK="iphoneos"
   IOS_SIMULATOR="OFF"
   BUILD_DEFAULT="$ROOT/build-ios-device"
-  SDL_DEFAULT="$ROOT/build-deps/sdl2-ios-dev-scenes"
+  SDL_DEFAULT="$ROOT/build-deps/sdl2-ios-dev-scenes-v2"
   ACTOOL_PLATFORM="iphoneos"
 else
   SDK="iphonesimulator"
   IOS_SIMULATOR="ON"
   BUILD_DEFAULT="$ROOT/build-ios-sim"
-  SDL_DEFAULT="$ROOT/build-deps/sdl2-ios-sim-scenes"
+  SDL_DEFAULT="$ROOT/build-deps/sdl2-ios-sim-scenes-v2"
   ACTOOL_PLATFORM="iphonesimulator"
 fi
 
