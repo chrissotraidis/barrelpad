@@ -73,6 +73,15 @@ if [ -f "$OVERLAY_INPUT_RESUME" ]; then
   fi
 fi
 mkdir -p "$SRC/platform/barrelpad"
+AUDIO_HEADROOM="$ROOT/patches/goldenballoon-ios-audio-headroom.patch"
+if [ -f "$AUDIO_HEADROOM" ]; then
+  if (cd "$SRC" && patch -p1 --forward --dry-run < "$AUDIO_HEADROOM" >/dev/null 2>&1); then
+    (cd "$SRC" && patch -p1 --forward < "$AUDIO_HEADROOM")
+    echo "[BarrelPad] applied goldenballoon-ios-audio-headroom.patch"
+  else
+    echo "[BarrelPad] audio-headroom patch already applied or not clean"
+  fi
+fi
 AUDIO_TELEMETRY="$ROOT/patches/goldenballoon-ios-audio-telemetry.patch"
 if [ -f "$AUDIO_TELEMETRY" ]; then
   if (cd "$SRC" && patch -p1 --forward --dry-run < "$AUDIO_TELEMETRY" >/dev/null 2>&1); then
