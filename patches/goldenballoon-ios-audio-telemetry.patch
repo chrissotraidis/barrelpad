@@ -1,0 +1,16 @@
+diff --git a/platform/audi_port_dkr.c b/platform/audi_port_dkr.c
+--- a/platform/audi_port_dkr.c
++++ b/platform/audi_port_dkr.c
+@@ -784,6 +784,12 @@
+     u32 queued;
+ 
+     s_serviceCalls++;
++    /* BarrelPad TV diagnostics: with MDKR_AUDIO_SERVICE_TRACE on, write the
++     * service and sink summary about every 10 s, not only at shutdown (an iPad
++     * game is usually killed, so the shutdown summary never reaches the log). */
++    if (audio_service_trace_enabled() && (s_serviceCalls % 600u) == 0u) {
++        dkr_audio_service_summary();
++    }
+     if (!mdkr_audio_service_clock_take(&s_serviceClock)) {
+         s_serviceIdle++;
+         return;

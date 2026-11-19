@@ -102,6 +102,12 @@ int BarrelPad_PrepareIosRomBoot(void) {
      * enabled, while the player can change the preset or aspect in Settings. */
     setenv("MDKR_WINDOW_MODE", "fullscreen", 1);
 
+    /* TV diagnostics for jittery music: the engine's own audio service and
+     * event-queue traces, written to Documents/mdkr64.log. A value set by the
+     * launch environment wins (overwrite = 0). */
+    setenv("MDKR_AUDIO_SERVICE_TRACE", "1", 0);
+    setenv("MDKR_EVTQ_STATS", "1", 0);
+
     /* Point every writable engine/launcher path at the app's own Documents so
      * settings, video config, and saves work inside the sandbox. SDL_GetPrefPath
      * cannot resolve on iOS (no $HOME), and the engine's packaged-path marker is

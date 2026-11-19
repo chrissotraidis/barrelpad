@@ -73,6 +73,15 @@ if [ -f "$OVERLAY_INPUT_RESUME" ]; then
   fi
 fi
 mkdir -p "$SRC/platform/barrelpad"
+AUDIO_TELEMETRY="$ROOT/patches/goldenballoon-ios-audio-telemetry.patch"
+if [ -f "$AUDIO_TELEMETRY" ]; then
+  if (cd "$SRC" && patch -p1 --forward --dry-run < "$AUDIO_TELEMETRY" >/dev/null 2>&1); then
+    (cd "$SRC" && patch -p1 --forward < "$AUDIO_TELEMETRY")
+    echo "[BarrelPad] applied goldenballoon-ios-audio-telemetry.patch"
+  else
+    echo "[BarrelPad] audio-telemetry patch already applied or not clean"
+  fi
+fi
 cp -f "$ROOT/ios/BarrelPadShell.mm" "$ROOT/ios/BarrelPadTouchControls.h" \
   "$ROOT/src/BarrelPadInput.c" "$ROOT/src/BarrelPadInput.h" \
   "$ROOT/src/BarrelPadControllerSlots.h" \
