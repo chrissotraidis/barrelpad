@@ -1,0 +1,46 @@
+diff --git a/platform/audio_queue_controller.c b/platform/audio_queue_controller.c
+--- a/platform/audio_queue_controller.c
++++ b/platform/audio_queue_controller.c
+@@ -1,6 +1,9 @@
+ #include "audio_queue_controller.h"
+ 
+ #include <limits.h>
++#if defined(__APPLE__)
++#include <TargetConditionals.h>
++#endif
+ #include <string.h>
+ 
+ static uint32_t fallback_frame_size(uint32_t output_rate) {
+@@ -72,7 +75,15 @@
+             }
+         }
+ 
++        /* BarrelPad on iPad: keep two synthesis frames queued (~66 ms at
++         * 22050 Hz) instead of one. On an external display the frame cadence
++         * varies more, and one frame of headroom ran the queue dry about once a
++         * second (19 November TV log: emptyobservations rising, minqueued=0). */
++#if defined(__APPLE__) && TARGET_OS_IOS
++        correction = (int64_t)frame_size * 2 - (int64_t)queued_frames;
++#else
+         correction = (int64_t)frame_size - (int64_t)queued_frames;
++#endif
+         if (consumed > (uint64_t)INT64_MAX) {
+             signed_produce = INT64_MAX;
+         } else if (correction > 0 &&
+@@ -90,7 +101,16 @@
+     if (produce > max_samples) {
+         produce = max_samples;
+     }
++#if defined(__APPLE__) && TARGET_OS_IOS
++    /* Round up, not down: rounding down dropped ~7 samples a call (~1% of the
++     * audio), so production fell behind the output. Stay within max_samples. */
++    produce = (produce + 15u) & ~UINT64_C(15);
++    if (produce > max_samples) {
++        produce = (uint64_t)max_samples & ~UINT64_C(15);
++    }
++#else
+     produce &= ~UINT64_C(15);
++#endif
+ 
+     if (controller != NULL && have_sink) {
+         controller->stats.produced_frames += produce;
